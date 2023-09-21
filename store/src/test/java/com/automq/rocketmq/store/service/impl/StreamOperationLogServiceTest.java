@@ -17,6 +17,7 @@
 
 package com.automq.rocketmq.store.service.impl;
 
+import com.automq.rocketmq.controller.exception.ControllerException;
 import com.automq.rocketmq.metadata.StoreMetadataService;
 import com.automq.rocketmq.store.StreamStore;
 import com.automq.rocketmq.store.impl.StreamStoreImpl;
@@ -58,7 +59,7 @@ class StreamOperationLogServiceTest {
     }
 
     @Test
-    void logPopOperation() {
+    void logPopOperation() throws ControllerException {
         long operationId = operationLogService.logPopOperation(CONSUMER_GROUP_ID, TOPIC_ID, QUEUE_ID, OFFSET, BATCH_SIZE, IS_ORDER, INVISIBLE_DURATION, OPERATION_TIMESTAMP).join();
         long streamId = metadataService.getOperationLogStreamId(TOPIC_ID, QUEUE_ID);
         FetchResult fetchResult = streamStore.fetch(streamId, operationId, 1).join();
@@ -85,7 +86,7 @@ class StreamOperationLogServiceTest {
     }
 
     @Test
-    void logAckOperation() {
+    void logAckOperation() throws ControllerException {
         long operationId = operationLogService.logAckOperation(SerializeUtil.decodeReceiptHandle(RECEIPT_HANDLE), OPERATION_TIMESTAMP).join();
         long streamId = metadataService.getOperationLogStreamId(TOPIC_ID, QUEUE_ID);
         FetchResult fetchResult = streamStore.fetch(streamId, operationId, 1).join();
@@ -108,7 +109,7 @@ class StreamOperationLogServiceTest {
     }
 
     @Test
-    void logChangeInvisibleDurationOperation() {
+    void logChangeInvisibleDurationOperation() throws ControllerException {
         long operationId = operationLogService.logChangeInvisibleDurationOperation(SerializeUtil.decodeReceiptHandle(RECEIPT_HANDLE), INVISIBLE_DURATION, OPERATION_TIMESTAMP).join();
         long streamId = metadataService.getOperationLogStreamId(TOPIC_ID, QUEUE_ID);
         FetchResult fetchResult = streamStore.fetch(streamId, operationId, 1).join();

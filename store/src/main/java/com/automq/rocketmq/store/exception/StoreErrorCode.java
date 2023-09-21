@@ -22,4 +22,5 @@ public enum StoreErrorCode {
     KV_SERVICE_IS_NOT_RUNNING,
     ILLEGAL_ARGUMENT,
     KV_ENGINE_ERROR,
+    METADATA_ERROR,
 }

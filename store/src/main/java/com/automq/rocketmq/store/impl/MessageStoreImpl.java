@@ -20,9 +20,11 @@ package com.automq.rocketmq.store.impl;
 import com.automq.rocketmq.common.config.StoreConfig;
 import com.automq.rocketmq.common.model.MessageExt;
 import com.automq.rocketmq.common.model.generated.Message;
+import com.automq.rocketmq.controller.exception.ControllerException;
 import com.automq.rocketmq.metadata.StoreMetadataService;
 import com.automq.rocketmq.store.MessageStore;
 import com.automq.rocketmq.store.StreamStore;
+import com.automq.rocketmq.store.exception.StoreErrorCode;
 import com.automq.rocketmq.store.exception.StoreException;
 import com.automq.rocketmq.store.model.generated.CheckPoint;
 import com.automq.rocketmq.store.model.generated.ReceiptHandle;
@@ -220,10 +222,20 @@ public class MessageStoreImpl implements MessageStore {
             queueId, offset, batchSize, fifo, invisibleDuration, operationTimestamp);
 
         long streamId;
-        if (retry) {
-            streamId = metadataService.getRetryStreamId(consumerGroupId, topicId, queueId);
-        } else {
-            streamId = metadataService.getStreamId(topicId, queueId);
+        try {
+            if (retry) {
+                streamId = metadataService.getRetryStreamId(consumerGroupId, topicId, queueId);
+            } else {
+                streamId = metadataService.getStreamId(topicId, queueId);
+            }
+        } catch (ControllerException e) {
+            String errorMessage;
+            if (retry) {
+                errorMessage = String.format("Failed to get retry stream id of consumer group id: %d, topic: %s, queue id: %d.", consumerGroupId, topicId, queueId);
+            } else {
+                errorMessage = String.format("Failed to get stream id of topic: %s, queue id: %d.", topicId, queueId);
+            }
+            return CompletableFuture.failedFuture(new StoreException(StoreErrorCode.METADATA_ERROR, errorMessage, e));
         }
 
         int fetchBatchSize;
@@ -314,7 +326,13 @@ public class MessageStoreImpl implements MessageStore {
 
     @Override
     public CompletableFuture<PutResult> put(Message message, Map<String, String> systemProperties) {
-        long streamId = metadataService.getStreamId(message.topicId(), message.queueId());
+        long streamId;
+        try {
+            streamId = metadataService.getStreamId(message.topicId(), message.queueId());
+        } catch (ControllerException e) {
+            String errorMessage = String.format("Failed to get stream id of topic: %s, queue id: %d.", message.topicId(), message.queueId());
+            return CompletableFuture.failedFuture(new StoreException(StoreErrorCode.METADATA_ERROR, errorMessage, e));
+        }
         return streamStore.append(streamId, new SingleRecord(systemProperties, message.getByteBuffer()))
             .thenApply(appendResult -> new PutResult(appendResult.baseOffset()));
     }
@@ -397,11 +415,22 @@ public class MessageStoreImpl implements MessageStore {
                             checkPoint.deliveryTimestamp(), nextInvisibleTimestamp, checkPoint.reconsumeCount()));
 
                     long streamId;
-                    if (checkPoint.retry()) {
-                        streamId = metadataService.getRetryStreamId(checkPoint.consumerGroupId(), checkPoint.topicId(), checkPoint.queueId());
-                    } else {
-                        streamId = metadataService.getStreamId(checkPoint.topicId(), checkPoint.queueId());
+                    try {
+                        if (checkPoint.retry()) {
+                            streamId = metadataService.getRetryStreamId(checkPoint.consumerGroupId(), checkPoint.topicId(), checkPoint.queueId());
+                        } else {
+                            streamId = metadataService.getStreamId(checkPoint.topicId(), checkPoint.queueId());
+                        }
+                    } catch (ControllerException e) {
+                        String errorMessage;
+                        if (checkPoint.retry()) {
+                            errorMessage = String.format("Failed to get retry stream id of consumer group id: %d, topic: %s, queue id: %d.", checkPoint.consumerGroupId(), checkPoint.topicId(), checkPoint.queueId());
+                        } else {
+                            errorMessage = String.format("Failed to get stream id of topic: %s, queue id: %d.", checkPoint.topicId(), checkPoint.queueId());
+                        }
+                        throw new StoreException(StoreErrorCode.METADATA_ERROR, errorMessage, e);
                     }
+
                     BatchWriteRequest writeTimerTagRequest = new BatchWriteRequest(KV_NAMESPACE_TIMER_TAG,
                         buildTimerTagKey(nextInvisibleTimestamp, checkPoint.topicId(), checkPoint.queueId(), checkPoint.messageOffset(), checkPoint.operationId()),
                         buildTimerTagValue(nextInvisibleTimestamp, checkPoint.consumerGroupId(), checkPoint.topicId(), checkPoint.queueId(),

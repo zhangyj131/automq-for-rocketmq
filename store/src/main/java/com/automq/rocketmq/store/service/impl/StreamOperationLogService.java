@@ -17,8 +17,11 @@
 
 package com.automq.rocketmq.store.service.impl;
 
+import com.automq.rocketmq.controller.exception.ControllerException;
 import com.automq.rocketmq.metadata.StoreMetadataService;
 import com.automq.rocketmq.store.StreamStore;
+import com.automq.rocketmq.store.exception.StoreErrorCode;
+import com.automq.rocketmq.store.exception.StoreException;
 import com.automq.rocketmq.store.model.generated.ReceiptHandle;
 import com.automq.rocketmq.store.model.stream.SingleRecord;
 import com.automq.rocketmq.store.service.OperationLogService;
@@ -41,16 +44,28 @@ public class StreamOperationLogService implements OperationLogService {
     @Override
     public CompletableFuture<Long> logPopOperation(long consumerGroupId, long topicId, int queueId, long offset,
         int batchSize, boolean isOrder, long invisibleDuration, long operationTimestamp) {
-        long streamId = metadataService.getOperationLogStreamId(topicId, queueId);
+        long streamId;
+        try {
+            streamId = metadataService.getOperationLogStreamId(topicId, queueId);
+        } catch (ControllerException e) {
+            String errorMessage = String.format("Failed to get operation stream id of topic: %s, queue id: %d.", topicId, queueId);
+            return CompletableFuture.failedFuture(new StoreException(StoreErrorCode.METADATA_ERROR, errorMessage, e));
+        }
         CompletableFuture<AppendResult> append = streamStore.append(streamId, new SingleRecord(new HashMap<>(),
             ByteBuffer.wrap(SerializeUtil.encodePopOperation(consumerGroupId, topicId, queueId, offset, batchSize, isOrder, invisibleDuration, operationTimestamp))));
         return append.thenApply(AppendResult::baseOffset);
     }
 
     @Override
-    public CompletableFuture<Long> logAckOperation(ReceiptHandle receiptHandle,
-        long operationTimestamp) {
-        long streamId = metadataService.getOperationLogStreamId(receiptHandle.topicId(), receiptHandle.queueId());
+    public CompletableFuture<Long> logAckOperation(ReceiptHandle receiptHandle, long operationTimestamp) {
+        long streamId;
+        try {
+            streamId = metadataService.getOperationLogStreamId(receiptHandle.topicId(), receiptHandle.queueId());
+        } catch (ControllerException e) {
+            String errorMessage = String.format("Failed to get operation stream id of topic: %s, queue id: %d.", receiptHandle.topicId(), receiptHandle.queueId());
+            return CompletableFuture.failedFuture(new StoreException(StoreErrorCode.METADATA_ERROR, errorMessage, e));
+        }
+
         CompletableFuture<AppendResult> append = streamStore.append(streamId, new SingleRecord(new HashMap<>(),
             ByteBuffer.wrap(SerializeUtil.encodeAckOperation(receiptHandle, operationTimestamp))));
         return append.thenApply(AppendResult::baseOffset);
@@ -59,7 +74,14 @@ public class StreamOperationLogService implements OperationLogService {
     @Override
     public CompletableFuture<Long> logChangeInvisibleDurationOperation(ReceiptHandle receiptHandle,
         long invisibleDuration, long operationTimestamp) {
-        long streamId = metadataService.getOperationLogStreamId(receiptHandle.topicId(), receiptHandle.queueId());
+        long streamId;
+        try {
+            streamId = metadataService.getOperationLogStreamId(receiptHandle.topicId(), receiptHandle.queueId());
+        } catch (ControllerException e) {
+            String errorMessage = String.format("Failed to get operation stream id of topic: %s, queue id: %d.", receiptHandle.topicId(), receiptHandle.queueId());
+            return CompletableFuture.failedFuture(new StoreException(StoreErrorCode.METADATA_ERROR, errorMessage, e));
+        }
+
         CompletableFuture<AppendResult> append = streamStore.append(streamId, new SingleRecord(new HashMap<>(),
             ByteBuffer.wrap(SerializeUtil.encodeChangeInvisibleDurationOperation(receiptHandle, invisibleDuration, operationTimestamp))));
         return append.thenApply(AppendResult::baseOffset);

@@ -20,6 +20,7 @@ package com.automq.rocketmq.store.impl;
 import com.automq.rocketmq.common.config.StoreConfig;
 import com.automq.rocketmq.common.model.MessageExt;
 import com.automq.rocketmq.common.model.generated.Message;
+import com.automq.rocketmq.controller.exception.ControllerException;
 import com.automq.rocketmq.metadata.StoreMetadataService;
 import com.automq.rocketmq.store.MessageStore;
 import com.automq.rocketmq.store.StreamStore;
@@ -86,7 +87,7 @@ class MessageStoreTest {
     }
 
     @Test
-    void pop() throws StoreException {
+    void pop() throws StoreException, ControllerException {
         long testStartTime = System.nanoTime();
 
         // Append mock message.
@@ -130,7 +131,7 @@ class MessageStoreTest {
     }
 
     @Test
-    void popMultiple() throws StoreException {
+    void popMultiple() throws StoreException, ControllerException {
         // Append mock message.
         long streamId = metadataService.getStreamId(1, 1);
         streamStore.append(streamId, new SingleRecord(new HashMap<>(), buildMessage(1, 1, ""))).join();
@@ -206,7 +207,7 @@ class MessageStoreTest {
     }
 
     @Test
-    void popWithFilter() throws StoreException {
+    void popWithFilter() throws StoreException, ControllerException {
         // Append mock message.
         long streamId = metadataService.getStreamId(1, 1);
         streamStore.append(streamId, new SingleRecord(new HashMap<>(), buildMessage(1, 1, "tagA"))).join();
@@ -259,7 +260,7 @@ class MessageStoreTest {
     }
 
     @Test
-    void popOrderly() throws StoreException {
+    void popOrderly() throws StoreException, ControllerException {
         // Append mock message.
         long streamId = metadataService.getStreamId(1, 1);
         streamStore.append(streamId, new SingleRecord(new HashMap<>(), buildMessage())).join();
@@ -317,7 +318,7 @@ class MessageStoreTest {
     }
 
     @Test
-    void ack() throws StoreException {
+    void ack() throws StoreException, ControllerException {
         // Append mock message.
         long streamId = metadataService.getStreamId(1, 1);
         streamStore.append(streamId, new SingleRecord(new HashMap<>(), buildMessage())).join();
@@ -343,7 +344,7 @@ class MessageStoreTest {
     }
 
     @Test
-    void changeInvisibleDuration() throws StoreException {
+    void changeInvisibleDuration() throws StoreException, ControllerException {
         // Append mock message.
         long streamId = metadataService.getStreamId(1, 1);
         streamStore.append(streamId, new SingleRecord(new HashMap<>(), buildMessage())).join();

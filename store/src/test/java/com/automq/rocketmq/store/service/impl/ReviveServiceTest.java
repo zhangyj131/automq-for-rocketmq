@@ -18,6 +18,7 @@
 package com.automq.rocketmq.store.service.impl;
 
 import com.automq.rocketmq.common.model.MessageExt;
+import com.automq.rocketmq.controller.exception.ControllerException;
 import com.automq.rocketmq.metadata.StoreMetadataService;
 import com.automq.rocketmq.store.StreamStore;
 import com.automq.rocketmq.store.exception.StoreException;
@@ -61,7 +62,7 @@ class ReviveServiceTest {
     }
 
     @Test
-    void tryRevive() throws StoreException, InterruptedException {
+    void tryRevive() throws StoreException, ControllerException {
         // Append mock message.
         long streamId = metadataService.getStreamId(32, 32);
         streamStore.append(streamId, new SingleRecord(new HashMap<>(), buildMessage(32, 32, ""))).join();
