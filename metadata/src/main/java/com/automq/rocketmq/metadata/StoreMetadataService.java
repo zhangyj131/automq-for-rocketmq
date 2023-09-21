@@ -20,19 +20,60 @@ package com.automq.rocketmq.metadata;
 import apache.rocketmq.controller.v1.S3StreamObject;
 import apache.rocketmq.controller.v1.S3WALObject;
 import apache.rocketmq.controller.v1.StreamMetadata;
+import com.automq.rocketmq.common.exception.RocketMQException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public interface StoreMetadataService {
-    long getStreamId(long topicId, int queueId);
+    /**
+     *  Get the stream-id that stores data for the topic/queue
+     *
+     * @param topicId
+     * @param queueId
+     * @return
+     * @throws RocketMQException in the follow cases: 1) TopicId/queueId were deleted; Code::RESOURCE_DELETED
+     *                                                2) queueId >= queueNum of topic; Code::BAD_REQUEST
+     *                                                3) Fails to connect to metadata store, including DB being out of service; Code::INTERNAL
+     */
+    long getStreamId(long topicId, int queueId) throws RocketMQException;
 
-    long getOperationLogStreamId(long topicId, int queueId);
+    long getOperationLogStreamId(long topicId, int queueId) throws RocketMQException;
 
-    long getRetryStreamId(long consumerGroupId, long topicId, int queueId);
+    /**
+     *
+     * @param consumerGroupId
+     * @param topicId
+     * @param queueId
+     * @return
+     * @throws RocketMQException 1)
+     *                           2)
+     *                           3)
+     *                           4) Retry stream has not yet been created because it's created on demand; Code::NOT_FOUND
+     */
+    long getRetryStreamId(long consumerGroupId, long topicId, int queueId) throws RocketMQException;
 
-    long getDeadLetterStreamId(long consumerGroupId, long topicId, int queueId);
+    /**
+     *
+     * @param consumerGroupId
+     * @param topicId
+     * @param queueId
+     * @return
+     * @throws RocketMQException 1)
+     *                           2)
+     *                           3)
+     *                           4) Stream for DLQ has not yet been created because it's created on demand; Code::NOT_FOUND
+     */
+    long getDeadLetterStreamId(long consumerGroupId, long topicId, int queueId) throws RocketMQException;
 
-    int getMaxRetryTimes(long consumerGroupId);
+    /**
+     *
+     * @param consumerGroupId
+     * @return
+     * @throws RocketMQException 1) Group not found; Code::NOT_FOUND
+     *                           2) Group deleted; Code::RESOURCE_DELETED
+     *                           3) Code::INTERNAL
+     */
+    int getMaxRetryTimes(long consumerGroupId) throws RocketMQException;
 
     /**
      * Trim stream to new start offset. The old data will be deleted or marked as deleted.
