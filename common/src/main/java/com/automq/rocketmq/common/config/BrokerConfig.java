@@ -17,16 +17,31 @@
 
 package com.automq.rocketmq.common.config;
 
+import com.automq.rocketmq.common.ControllerConfig;
 import org.apache.rocketmq.common.utils.NetworkUtil;
 
-public class BrokerConfig {
+public class BrokerConfig implements ControllerConfig {
     private String name;
     /**
      * If the broker is running on an EC2 instance, this is the instance-id.
      */
     private String instanceId;
-    int nodeId;
     private String address = NetworkUtil.getLocalAddress();
+    int nodeId;
+    long epoch;
+    /**
+     * EBS volume-id
+     */
+    String volumeId;
+    /**
+     * host-name
+     */
+    String hostName;
+    /**
+     * vpc-id
+     */
+    String vpcId;
+
     private ProxyConfig proxy;
     private StoreConfig store;
     private S3StreamConfig s3Stream;
@@ -47,7 +62,6 @@ public class BrokerConfig {
     public ControllerConfig controller() {
         return controller;
     }
-
     public String name() {
         return name;
     }
@@ -60,14 +74,28 @@ public class BrokerConfig {
         return address;
     }
 
+    public long epoch() {
+        return epoch;
+    }
     public int nodeId() {
         return nodeId;
+    }
+    public String volumeId() {
+        return volumeId;
+    }
+
+    public String hostName() {
+        return hostName;
+    }
+
+    public String vpcId() {
+        return vpcId;
     }
 
     public BrokerConfig() {
         this.proxy = new ProxyConfig();
         this.store = new StoreConfig();
         this.s3Stream = new S3StreamConfig();
-        this.controller = new ControllerConfig();
+        this.controller = new DefaultControllerConfig();
     }
 }

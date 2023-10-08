@@ -15,30 +15,27 @@
  * limitations under the License.
  */
 
-package com.automq.rocketmq.controller.metadata;
+package com.automq.rocketmq.common.config;
 
-public interface ControllerConfig {
-    int nodeId();
+import com.automq.rocketmq.common.ControllerConfig;
 
-    long epoch();
+public class DefaultControllerConfig implements ControllerConfig {
 
-    default int scanIntervalInSecs() {
-        return 30;
+    // Database related configs
+    private String dbUrl;
+    private String dbUser;
+    private String dbPassword;
+
+    public String dbUrl() {
+        return dbUrl;
     }
 
-    default int leaseLifeSpanInSecs() {
-        return 60;
+    public String dbUser() {
+        return dbUser;
     }
 
-    default int nodeAliveIntervalInSecs() {
-        return 60;
-    }
-
-    /**
-     * @return Tolerance of workload unfairness among nodes in terms of stream number.
-     */
-    default int workloadTolerance() {
-        return 3;
+    public String dbPassword() {
+        return dbPassword;
     }
 
 }

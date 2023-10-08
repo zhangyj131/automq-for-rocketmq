@@ -51,7 +51,7 @@ import com.automq.rocketmq.common.system.S3Constants;
 import com.automq.rocketmq.controller.exception.ControllerException;
 import com.automq.rocketmq.controller.metadata.BrokerNode;
 import com.automq.rocketmq.controller.metadata.ControllerClient;
-import com.automq.rocketmq.controller.metadata.ControllerConfig;
+import com.automq.rocketmq.common.ControllerConfig;
 import com.automq.rocketmq.controller.metadata.MetadataStore;
 import com.automq.rocketmq.controller.metadata.Role;
 import com.automq.rocketmq.controller.metadata.database.dao.Group;

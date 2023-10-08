@@ -24,7 +24,6 @@ import com.automq.rocketmq.common.util.Lifecycle;
 import com.automq.rocketmq.controller.ControllerServiceImpl;
 import com.automq.rocketmq.controller.MetadataStoreBuilder;
 import com.automq.rocketmq.controller.metadata.MetadataStore;
-import com.automq.rocketmq.controller.metadata.database.dao.Node;
 import com.automq.rocketmq.metadata.DefaultProxyMetadataService;
 import com.automq.rocketmq.metadata.DefaultStoreMetadataService;
 import com.automq.rocketmq.metadata.api.ProxyMetadataService;
@@ -54,10 +53,8 @@ public class BrokerController implements Lifecycle {
         // Init the proxy configuration.
         ProxyConfiguration.intConfig(brokerConfig.proxy());
 
-        Node fakeNode = new Node();
-        fakeNode.setEpoch(0);
-        fakeNode.setId(1);
-        metadataStore = MetadataStoreBuilder.build(brokerConfig.controller(), fakeNode);
+
+        metadataStore = MetadataStoreBuilder.build(brokerConfig);
         nodeRegistrar = new NodeRegistrar(brokerConfig, metadataStore);
         // Start the node registrar first, so that the node is registered before the proxy starts.
         metadataStore.start();

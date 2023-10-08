@@ -17,15 +17,19 @@
 
 package com.automq.rocketmq.controller;
 
-import com.automq.rocketmq.common.config.ControllerConfig;
+import com.automq.rocketmq.common.config.BrokerConfig;
 import com.automq.rocketmq.controller.metadata.GrpcControllerClient;
 import com.automq.rocketmq.controller.metadata.MetadataStore;
 import com.automq.rocketmq.controller.metadata.database.DefaultMetadataStore;
 import com.automq.rocketmq.controller.metadata.database.dao.Node;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Objects;
 import java.util.Properties;
+
+import com.automq.rocketmq.controller.metadata.database.mapper.NodeMapper;
 import org.apache.ibatis.io.Resources;
+import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 
@@ -33,36 +37,31 @@ public class MetadataStoreBuilder {
     public static ControllerServiceImpl build(MetadataStore metadataStore) {
         return new ControllerServiceImpl(metadataStore);
     }
-    public static MetadataStore build(ControllerConfig config, Node node) throws IOException {
-        SqlSessionFactory sessionFactory = getSessionFactory(config.dbUrl(), config.dbUser(), config.dbPassword());
+    public static MetadataStore build(BrokerConfig config) throws IOException {
+        SqlSessionFactory sessionFactory = getSessionFactory(config.controller().dbUrl(), config.controller().dbUser(), config.controller().dbPassword());
+        Node node;
 
-        // TODO: Should unify the config interface.
-        return new DefaultMetadataStore(new GrpcControllerClient(), sessionFactory, new com.automq.rocketmq.controller.metadata.ControllerConfig() {
-            @Override
-            public int nodeId() {
-                return node.getId();
-            }
+        try (SqlSession session = sessionFactory.openSession()) {
+            NodeMapper nodeMapper = session.getMapper(NodeMapper.class);
+            node = nodeMapper.get(config.nodeId(), config.name(), config.instanceId(), config.volumeId());
 
-            @Override
-            public long epoch() {
-                return node.getEpoch();
+            if (Objects.isNull(node)) {
+                node = new Node() {
+                    {
+                        setEpoch(config.epoch());
+                        setName(config.name());
+                        setInstanceId(config.instanceId());
+                        setVolumeId(config.volumeId());
+                        setHostName(config.hostName());
+                        setVpcId(config.vpcId());
+                        setAddress(config.address());
+                    }
+                };
+                nodeMapper.create(node);
             }
+        }
 
-            @Override
-            public int scanIntervalInSecs() {
-                return config.scanIntervalInSecs();
-            }
-
-            @Override
-            public int leaseLifeSpanInSecs() {
-                return config.leaseLifeSpanInSecs();
-            }
-
-            @Override
-            public int nodeAliveIntervalInSecs() {
-                return config.nodeAliveIntervalInSecs();
-            }
-        });
+        return new DefaultMetadataStore(new GrpcControllerClient(), sessionFactory, config);
     }
 
     private static SqlSessionFactory getSessionFactory(String dbUrl, String dbUser, String dbPassword) throws IOException {
