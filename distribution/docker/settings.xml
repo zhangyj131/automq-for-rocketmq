@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" 
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 
+          http://maven.apache.org/xsd/settings-1.0.0.xsd">
+          
+  <!--本地仓库目录，注意此处目录应该与上面的设置Local Repository一致-->
+  <localRepository>${user.home}/.m2/repository</localRepository>
+  <servers>
+        <server>
+            <id>serverless-100005712758-hellocorp-maven</id>
+            <username>maven-1679450529232</username>
+            <password>a094d4a1cf6eb8232f88689d40f6e39b8dd9cccd</password>
+        </server>
+  </servers>
+  <mirrors>
+    <mirror>
+      <!--该镜像的id-->
+      <id>aliyunmaven</id>
+      <!--该镜像用来取代的远程仓库，central是中央仓库的id-->
+      <mirrorOf>central,jcenter</mirrorOf>
+      <name>Nexus aliyun</name>
+      <!--该镜像的仓库地址，这里是用的阿里的仓库-->
+      <url>https://maven.aliyun.com/repository/public</url>
+    </mirror>
+    <mirror>
+      <!--该镜像的id-->
+      <id>aliyunmaven-spring</id>
+      <!--该镜像用来取代的远程仓库，central是中央仓库的id-->
+      <mirrorOf>spring</mirrorOf>
+      <name>Nexus aliyun-spring</name>
+      <!--该镜像的仓库地址，这里是用的阿里的仓库-->
+      <url>https://maven.aliyun.com/repository/spring</url>
+    </mirror>
+    <mirror>
+      <!--该镜像的id-->
+      <id>aliyunmaven-apache-snapshots</id>
+      <!--该镜像用来取代的远程仓库，central是中央仓库的id-->
+      <mirrorOf>apache snapshots</mirrorOf>
+      <name>Nexus aliyun-apache-snapshots</name>
+      <!--该镜像的仓库地址，这里是用的阿里的仓库-->
+      <url>https://maven.aliyun.com/repository/apache-snapshots</url>
+    </mirror>
+    <mirror>
+      <!--该镜像的id-->
+      <id>aliyunmaven-spring-plugin</id>
+      <!--该镜像用来取代的远程仓库，central是中央仓库的id-->
+      <mirrorOf>spring-plugin</mirrorOf>
+      <name>Nexus aliyun-spring-plugin</name>
+      <!--该镜像的仓库地址，这里是用的阿里的仓库-->
+      <url>https://maven.aliyun.com/repository/spring-plugin</url>
+    </mirror>
+    <mirror>
+      <!--该镜像的id-->
+      <id>aliyunmaven-gradle-plugin</id>
+      <!--该镜像用来取代的远程仓库，central是中央仓库的id-->
+      <mirrorOf>gradle-plugin</mirrorOf>
+      <name>Nexus aliyun-gradle-plugin</name>
+      <!--该镜像的仓库地址，这里是用的阿里的仓库-->
+      <url>https://maven.aliyun.com/repository/gradle-plugin</url>
+    </mirror>
+    <mirror>
+      <!--该镜像的id-->
+      <id>aliyunmaven-google</id>
+      <!--该镜像用来取代的远程仓库，central是中央仓库的id-->
+      <mirrorOf>google</mirrorOf>
+      <name>Nexus aliyun-google</name>
+      <!--该镜像的仓库地址，这里是用的阿里的仓库-->
+      <url>https://maven.aliyun.com/repository/google</url>
+    </mirror> 
+    <mirror>
+      <!--该镜像的id-->
+      <id>aliyunmaven-grails-core</id>
+      <!--该镜像用来取代的远程仓库，central是中央仓库的id-->
+      <mirrorOf>grails-core</mirrorOf>
+      <name>Nexus aliyun-grails-core</name>
+      <!--该镜像的仓库地址，这里是用的阿里的仓库-->
+      <url>https://maven.aliyun.com/repository/grails-core</url>
+    </mirror>
+  </mirrors>
+</settings>
