@@ -9,6 +9,7 @@ RUN yum install wget tar xz gzip -y  \
     && wget -O /root/maven.tar.gz https://dlcdn.apache.org/maven/maven-3/3.9.5/binaries/apache-maven-3.9.5-bin.tar.gz \
     && tar -xzf /root/maven.tar.gz --strip-components=1 -C /root/maven \
     && cd /root/repo \
+    && bash /root/repo/install_flatc.sh \
     && /root/maven/bin/mvn package -Dmaven.test.skip=true
 
 FROM amazoncorretto:21
