@@ -137,4 +137,60 @@ public class ProxyConfig extends BaseConfig {
     public void setRemotingListenPort(int remotingListenPort) {
         this.remotingListenPort = remotingListenPort;
     }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setRetryPriorityPercentage(int retryPriorityPercentage) {
+        this.retryPriorityPercentage = retryPriorityPercentage;
+    }
+
+    public void setLockExpireTime(long lockExpireTime) {
+        this.lockExpireTime = lockExpireTime;
+    }
+
+    public void setGrpcThreadPoolNums(int grpcThreadPoolNums) {
+        this.grpcThreadPoolNums = grpcThreadPoolNums;
+    }
+
+    public void setGrpcThreadPoolQueueCapacity(int grpcThreadPoolQueueCapacity) {
+        this.grpcThreadPoolQueueCapacity = grpcThreadPoolQueueCapacity;
+    }
+
+    public void setGrpcBossLoopNum(int grpcBossLoopNum) {
+        this.grpcBossLoopNum = grpcBossLoopNum;
+    }
+
+    public void setGrpcWorkerLoopNum(int grpcWorkerLoopNum) {
+        this.grpcWorkerLoopNum = grpcWorkerLoopNum;
+    }
+
+    public void setEnableGrpcEpoll(boolean enableGrpcEpoll) {
+        this.enableGrpcEpoll = enableGrpcEpoll;
+    }
+
+    public void setChannelExpiredTimeout(long channelExpiredTimeout) {
+        this.channelExpiredTimeout = channelExpiredTimeout;
+    }
+
+    public void setEnablePrintJstack(boolean enablePrintJstack) {
+        this.enablePrintJstack = enablePrintJstack;
+    }
+
+    public void setPrintJstackInMillis(long printJstackInMillis) {
+        this.printJstackInMillis = printJstackInMillis;
+    }
+
+    public void setPrintThreadPoolStatusInMillis(long printThreadPoolStatusInMillis) {
+        this.printThreadPoolStatusInMillis = printThreadPoolStatusInMillis;
+    }
+
+    public void setGrpcMaxInboundMessageSize(int grpcMaxInboundMessageSize) {
+        this.grpcMaxInboundMessageSize = grpcMaxInboundMessageSize;
+    }
+
+    public void setGrpcClientIdleTimeMills(long grpcClientIdleTimeMills) {
+        this.grpcClientIdleTimeMills = grpcClientIdleTimeMills;
+    }
 }

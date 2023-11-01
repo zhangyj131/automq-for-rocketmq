@@ -53,4 +53,32 @@ public class S3StreamConfig {
     public String s3SecretKey() {
         return s3SecretKey;
     }
+
+    public void setS3Endpoint(String s3Endpoint) {
+        this.s3Endpoint = s3Endpoint;
+    }
+
+    public void setS3Region(String s3Region) {
+        this.s3Region = s3Region;
+    }
+
+    public void setS3Bucket(String s3Bucket) {
+        this.s3Bucket = s3Bucket;
+    }
+
+    public void setS3ForcePathStyle(boolean s3ForcePathStyle) {
+        this.s3ForcePathStyle = s3ForcePathStyle;
+    }
+
+    public void setS3WALPath(String s3WALPath) {
+        this.s3WALPath = s3WALPath;
+    }
+
+    public void setS3AccessKey(String s3AccessKey) {
+        this.s3AccessKey = s3AccessKey;
+    }
+
+    public void setS3SecretKey(String s3SecretKey) {
+        this.s3SecretKey = s3SecretKey;
+    }
 }

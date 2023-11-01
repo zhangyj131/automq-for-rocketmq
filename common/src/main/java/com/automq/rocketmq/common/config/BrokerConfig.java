@@ -24,6 +24,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import org.apache.rocketmq.common.utils.NetworkUtil;
 
+/**
+ * Broker的配置
+ */
 public class BrokerConfig implements ControllerConfig {
     /**
      * Node ID
@@ -69,11 +72,11 @@ public class BrokerConfig implements ControllerConfig {
     private boolean terminating;
 
     public BrokerConfig() {
-        this.metrics = new MetricsConfig();
-        this.proxy = new ProxyConfig();
-        this.store = new StoreConfig();
+        this.metrics =  new MetricsConfig();
+        this.proxy =    new ProxyConfig();
+        this.store =    new StoreConfig();
         this.s3Stream = new S3StreamConfig();
-        this.db = new DatabaseConfig();
+        this.db =       new DatabaseConfig();
     }
 
     private static String parseHost(String address) {
@@ -244,5 +247,17 @@ public class BrokerConfig implements ControllerConfig {
 
     public String getInnerSecretKey() {
         return innerSecretKey;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public void setInstanceId(String instanceId) {
+        this.instanceId = instanceId;
+    }
+
+    public void setTerminating(boolean terminating) {
+        this.terminating = terminating;
     }
 }

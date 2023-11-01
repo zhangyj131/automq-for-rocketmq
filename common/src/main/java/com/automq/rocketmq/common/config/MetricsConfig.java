@@ -69,4 +69,40 @@ public class MetricsConfig {
     public boolean exportInDelta() {
         return exportInDelta;
     }
+
+    public void setExporterType(String exporterType) {
+        this.exporterType = exporterType;
+    }
+
+    public void setGrpcExporterTarget(String grpcExporterTarget) {
+        this.grpcExporterTarget = grpcExporterTarget;
+    }
+
+    public void setGrpcExporterHeader(String grpcExporterHeader) {
+        this.grpcExporterHeader = grpcExporterHeader;
+    }
+
+    public void setGrpcExporterTimeOutInMills(long grpcExporterTimeOutInMills) {
+        this.grpcExporterTimeOutInMills = grpcExporterTimeOutInMills;
+    }
+
+    public void setPeriodicExporterIntervalInMills(long periodicExporterIntervalInMills) {
+        this.periodicExporterIntervalInMills = periodicExporterIntervalInMills;
+    }
+
+    public void setPromExporterPort(int promExporterPort) {
+        this.promExporterPort = promExporterPort;
+    }
+
+    public void setPromExporterHost(String promExporterHost) {
+        this.promExporterHost = promExporterHost;
+    }
+
+    public void setLabels(String labels) {
+        this.labels = labels;
+    }
+
+    public void setExportInDelta(boolean exportInDelta) {
+        this.exportInDelta = exportInDelta;
+    }
 }

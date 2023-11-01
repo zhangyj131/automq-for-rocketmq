@@ -86,4 +86,24 @@ public class StoreConfig {
     public void setWorkingThreadQueueCapacity(int workingThreadQueueCapacity) {
         this.workingThreadQueueCapacity = workingThreadQueueCapacity;
     }
+
+    public void setMaxFetchCount(int maxFetchCount) {
+        this.maxFetchCount = maxFetchCount;
+    }
+
+    public void setMaxFetchBytes(long maxFetchBytes) {
+        this.maxFetchBytes = maxFetchBytes;
+    }
+
+    public void setMaxFetchTimeMillis(long maxFetchTimeMillis) {
+        this.maxFetchTimeMillis = maxFetchTimeMillis;
+    }
+
+    public void setFetchBatchSizeFactor(int fetchBatchSizeFactor) {
+        this.fetchBatchSizeFactor = fetchBatchSizeFactor;
+    }
+
+    public void setKvPath(String kvPath) {
+        this.kvPath = kvPath;
+    }
 }
