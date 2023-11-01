@@ -1,0 +1,27 @@
+name: DefaultBroker
+instanceId: "ec2-test"
+bindAddress: "0.0.0.0:8081"
+innerAccessKey: ""
+innerSecretKey: ""
+s3Stream:
+  s3WALPath: "/tmp/s3rocketmq/wal"
+  s3Endpoint: "http://minio.hellocorp.test"
+  s3Bucket: "lzh"
+  s3Region: "us-east-1"
+  s3ForcePathStyle: true
+  s3AccessKey: "kicaSWtNBPf7XCCsdW8Z"
+  s3SecretKey: "dgWxasHBEQBBXxAxBpFmp4VWIoQ0XyDU3gGdFnaT"
+db:
+  url: "jdbc:mysql://localhost:3306/metadata"
+  userName: "root"
+  password: "root"
+metrics:
+  exporterType: "OTLP_GRPC"
+  grpcExporterTarget: "http://10.129.63.127:4317"
+  grpcExporterHeader: ""
+  grpcExporterTimeOutInMills: 31000
+  periodicExporterIntervalInMills: 30000
+  promExporterPort: 5557
+  promExporterHost: "localhost"
+  labels: ""
+  exportInDelta: false

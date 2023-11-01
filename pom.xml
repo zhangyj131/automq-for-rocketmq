@@ -36,6 +36,7 @@
         <module>s3stream</module>
         <module>store</module>
         <module>proto</module>
+        <module>test</module>
     </modules>
 
     <properties>
