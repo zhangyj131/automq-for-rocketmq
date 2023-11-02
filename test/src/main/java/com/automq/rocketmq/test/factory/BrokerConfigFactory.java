@@ -21,6 +21,7 @@ import com.automq.rocketmq.common.config.BrokerConfig;
 import com.automq.rocketmq.common.config.DatabaseConfig;
 import com.automq.rocketmq.common.config.MetricsConfig;
 import com.automq.rocketmq.common.config.S3StreamConfig;
+import com.automq.rocketmq.common.config.StoreConfig;
 import com.automq.rocketmq.common.exception.RocketMQException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -159,7 +160,7 @@ public class BrokerConfigFactory {
         metricsConfig.setExportInDelta(false);
 
         S3StreamConfig s3StreamConfig = brokerConfig.s3Stream();
-        s3StreamConfig.setS3WALPath("/tmp/s3rocketmq/wal_" + idx);
+        s3StreamConfig.setS3WALPath("/tmp/s3rocketmq/%s/%s/wal".formatted(uuid, idx));
         s3StreamConfig.setS3Endpoint("http://minio.hellocorp.test");
         s3StreamConfig.setS3Bucket("lzh");
         s3StreamConfig.setS3Region("us-east-1");
@@ -171,6 +172,9 @@ public class BrokerConfigFactory {
         databaseConfig.setUrl("jdbc:mysql://localhost:3306/metadata");
         databaseConfig.setUserName("root");
         databaseConfig.setPassword("root");
+
+        StoreConfig storeConfig = brokerConfig.store();
+        storeConfig.setKvPath("/tmp/rocketmq/%s/%s/kvstore".formatted(uuid, idx));
 
         brokerConfig.initEnvVar();
         try {
