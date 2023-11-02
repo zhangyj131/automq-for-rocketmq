@@ -17,7 +17,7 @@
 
 package com.automq.rocketmq.controller.server.tasks;
 
-import apache.rocketmq.controller.v1.Code;
+import apache.rocketmq.common.v1.Code;
 import apache.rocketmq.controller.v1.S3ObjectState;
 import com.automq.rocketmq.controller.exception.ControllerException;
 import com.automq.rocketmq.controller.MetadataStore;
