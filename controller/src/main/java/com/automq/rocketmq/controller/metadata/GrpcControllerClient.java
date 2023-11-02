@@ -201,6 +201,13 @@ public class GrpcControllerClient implements ControllerClient {
         return future;
     }
 
+    /**
+     * 产生一个 Topic
+     * @param target 目标？
+     * @param request 创建 Topic 的请求
+     * @return 插入数据库的 id
+     * @throws ControllerException ControllerException
+     */
     @Override
     public CompletableFuture<Long> createTopic(String target, CreateTopicRequest request)
         throws ControllerException {

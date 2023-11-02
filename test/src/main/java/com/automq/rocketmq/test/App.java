@@ -15,18 +15,13 @@
  * limitations under the License.
  */
 
-package com.automq.rocketmq;
+package com.automq.rocketmq.test;
 
-import java.util.UUID;
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-public class UUIDTest {
-    @Test
-    public void uuidTest() {
-        UUID uuid = UUID.randomUUID();
-        Logger logger = LoggerFactory.getLogger(UUIDTest.class);
-        logger.info(uuid.toString());
+/**
+ * Hello world!
+ */
+public class App {
+    public static void main(String[] args) {
+        System.out.println("Hello World!");
     }
 }

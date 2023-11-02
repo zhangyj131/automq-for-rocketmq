@@ -4,18 +4,18 @@ bindAddress: "0.0.0.0:8081"
 innerAccessKey: ""
 innerSecretKey: ""
 s3Stream:
-  s3WALPath: "/tmp/s3rocketmq/wal"
-  s3Endpoint: "http://minio.hellocorp.test"
-  s3Bucket: "lzh"
-  s3Region: "us-east-1"
+  s3WALPath: "/tmp/s3rocketmq/wal" # 本地路径，文件是保存在本地 Bucket 下的
+  s3Endpoint: "http://minio.hellocorp.test" # 需改成localhost，如果是本地启动S3Bucket
+  s3Bucket: "lzh" # 本地Bucket的名称
+  s3Region: "us-east-1" # 如果是本地Bucket，就可以随便写了
   s3ForcePathStyle: true
   s3AccessKey: "kicaSWtNBPf7XCCsdW8Z"
   s3SecretKey: "dgWxasHBEQBBXxAxBpFmp4VWIoQ0XyDU3gGdFnaT"
-db:
+db: # 可以通过 test container 去创建
   url: "jdbc:mysql://localhost:3306/metadata"
   userName: "root"
   password: "root"
-metrics:
+metrics: # 不需要这个，可以删掉了
   exporterType: "OTLP_GRPC"
   grpcExporterTarget: "http://10.129.63.127:4317"
   grpcExporterHeader: ""
