@@ -21,7 +21,6 @@ package com.automq.rocketmq.cli;
 
 import apache.rocketmq.controller.v1.AcceptTypes;
 import apache.rocketmq.controller.v1.CreateTopicRequest;
-import apache.rocketmq.controller.v1.DescribeTopicRequest;
 import apache.rocketmq.controller.v1.MessageType;
 import apache.rocketmq.controller.v1.Topic;
 import com.automq.rocketmq.common.PrefixThreadFactory;
@@ -33,12 +32,18 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import picocli.CommandLine;
 
+import java.util.LinkedList;
+import java.util.Objects;
+import java.util.Queue;
+import java.util.Random;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-@CommandLine.Command(name = "stressTopci", mixinStandardHelpOptions = true, showDefaultValues = true)
+@CommandLine.Command(name = "stressTopic", mixinStandardHelpOptions = true, showDefaultValues = true)
 public class StressTopic implements Callable<Void> {
 
     @CommandLine.ParentCommand
@@ -56,8 +61,8 @@ public class StressTopic implements Callable<Void> {
     @CommandLine.Option(names = {"-mt", "--messageType"}, description = "Message type")
     MessageType messageType = MessageType.NORMAL;
 
-    @CommandLine.Option(names = {"--ttl"}, description = "Time to live of the topic")
-    String ttl = "3d0h";
+    @CommandLine.Option(names = {"-d", "--duration"}, description = "Duration in seconds")
+    int durationInSeconds = 10;
 
     @CommandLine.Option(names = {"-i", "--reportIntervalInSeconds"}, description = "Report interval in seconds")
     int reportIntervalInSeconds = 3;
@@ -66,45 +71,78 @@ public class StressTopic implements Callable<Void> {
 
     @Override
     public Void call() throws Exception {
-        ExecutorService executor = Executors.newCachedThreadPool(new PrefixThreadFactory("Benchmark-Controller"));
+        ExecutorService executor = Executors.newCachedThreadPool(new PrefixThreadFactory("Benchmark-Topic"));
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
         ConsoleReporter reporter = ConsoleReporter.forRegistry(metrics)
             .build();
         reporter.start(reportIntervalInSeconds, TimeUnit.SECONDS);
-        Timer timer = metrics.timer("Timer for sending messages");
+        Timer timer = metrics.timer("Timer for benchmark topic");
         long startTimestamp = System.currentTimeMillis();
         ControllerClient client = new GrpcControllerClient(new CliClientConfig());
+        long retentionHours = DurationUtil.parse("1h").toHours();
+        Random random = new Random();
+        CountDownLatch latch = new CountDownLatch(topicNums);
 
+        Queue<Long> topicIds = new LinkedList<>();
 
-        for (int i = 0; i < topicNums; i++) {
-            long retentionHours = 0;
-            try {
-                retentionHours = DurationUtil.parse(this.ttl).toHours();
-                if (retentionHours > Integer.MAX_VALUE) {
-                    System.err.println("Invalid ttl: " + this.ttl + ", max value is 2147483647h");
-                    System.exit(1);
+        executor.submit(() -> {
+            for (int i = 0; i < topicNums; i++) {
+                if (System.currentTimeMillis() - startTimestamp > durationInSeconds * 1000L) {
+                    break;
                 }
-                if (retentionHours < 1) {
-                    System.err.println("Invalid ttl: " + this.ttl + ", min value is 1h");
-                    System.exit(1);
+
+                try {
+                    String topicName = topicPrefix + i + generateRandomSuffix(7, random);
+                    CreateTopicRequest request = CreateTopicRequest.newBuilder()
+                        .setTopic(topicName)
+                        .setCount(queueNums)
+                        .setAcceptTypes(AcceptTypes.newBuilder().addTypes(messageType).build())
+                        .setRetentionHours((int) retentionHours)
+                        .build();
+
+                    Long topicId = client.createTopic(mqAdmin.endpoint, request).join();
+                    topicIds.add(topicId);
+                } catch (Exception e) {
+                    System.out.println("Failed to stress Topic: " + e.getMessage());
+                } finally {
+                    long start = System.currentTimeMillis();
+                    timer.update(System.currentTimeMillis() - start, TimeUnit.MILLISECONDS);
+                    latch.countDown();
+                }
+            }
+        });
+
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                if (!topicIds.isEmpty()) {
+                    Long topicId = topicIds.poll();
+                    Topic topic = client.describeTopic(mqAdmin.endpoint, topicId, null).join();
+                    if (Objects.isNull(topic)) {
+                        throw new RuntimeException("Topic not found: " + topicId);
+                    }
                 }
             } catch (Exception e) {
-                System.err.println("Invalid ttl: " + this.ttl);
-                System.exit(1);
+                System.out.println("Failed to describe topic: " + e.getMessage());
             }
+        }, 0, 1, TimeUnit.SECONDS);
 
-            String topicName = topicPrefix + i;
-            CreateTopicRequest request = CreateTopicRequest.newBuilder()
-                .setTopic(topicName)
-                .setCount(queueNums)
-                .setAcceptTypes(AcceptTypes.newBuilder().addTypes(messageType).build())
-                .setRetentionHours((int) retentionHours)
-                .build();
-
-            Long topicId = client.createTopic(mqAdmin.endpoint, request).join();
-            System.out.println("Topic created: " + topicId);
-            Topic topic = client.describeTopic(mqAdmin.endpoint, topicId, topicName).join();
-            System.out.println(topic);
-        }
+        latch.await();
+        executor.awaitTermination(durationInSeconds + 1, TimeUnit.SECONDS);
+        scheduler.awaitTermination(durationInSeconds + 1, TimeUnit.SECONDS);
+        reporter.close();
         return null;
+    }
+
+
+    private String generateRandomSuffix(int length, Random random) {
+        StringBuilder sb = new StringBuilder(length);
+        String characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        int charactersLength = characters.length();
+        for (int i = 0; i < length; i++) {
+            int randomIndex = random.nextInt(charactersLength);
+            char randomChar = characters.charAt(randomIndex);
+            sb.append(randomChar);
+        }
+        return sb.toString();
     }
 }

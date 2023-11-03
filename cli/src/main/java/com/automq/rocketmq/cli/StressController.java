@@ -233,7 +233,6 @@ public class StressController implements Callable<Void> {
 
             s3StreamObjects.add(streamObject);
         }
-
         return s3StreamObjects;
     }
 

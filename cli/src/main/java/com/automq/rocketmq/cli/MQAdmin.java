@@ -38,7 +38,8 @@ import picocli.CommandLine;
         ListGroup.class,
         ProduceMessage.class,
         ConsumeMessage.class,
-        TerminateNode.class
+        TerminateNode.class,
+        StressTopic.class
     }
 )
 public class MQAdmin implements Runnable {
