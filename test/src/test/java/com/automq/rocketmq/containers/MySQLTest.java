@@ -4,9 +4,12 @@ import com.automq.rocketmq.test.factory.MySQLFactory;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.MySQLContainer;
 
 public class MySQLTest {
+    private static final Logger log = LoggerFactory.getLogger(MySQLTest.class);
     private static final MySQLContainer MYSQL;
 
     static {
@@ -24,8 +27,10 @@ public class MySQLTest {
     }
 
     @Test
-    public void test() {
-        String username = MYSQL.getUsername();
-        String password = MYSQL.getPassword();
+    public void printInformation() {
+        log.info(MYSQL.getUsername());
+        log.info(MYSQL.getPassword());
+        log.info(MYSQL.getJdbcUrl());
+        log.info(MYSQL.getDatabaseName());
     }
 }

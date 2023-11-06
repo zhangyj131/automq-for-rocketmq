@@ -32,12 +32,10 @@ public class LocalStackTest {
 
     @Test
     public void printInformation() {
-        log.info(LOCALSTACK.getContainerId());
-        log.info(LOCALSTACK.getContainerName());
-        log.info(String.valueOf(LOCALSTACK.getEndpoint()));
         log.info(LOCALSTACK.getAccessKey());
         log.info(LOCALSTACK.getSecretKey());
         log.info(LOCALSTACK.getRegion());
+        log.info(String.valueOf(LOCALSTACK.getEndpoint()));
     }
 
     @Test
