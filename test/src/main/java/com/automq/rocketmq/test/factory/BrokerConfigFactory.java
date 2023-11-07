@@ -23,15 +23,19 @@ import com.automq.rocketmq.common.config.MetricsConfig;
 import com.automq.rocketmq.common.config.S3StreamConfig;
 import com.automq.rocketmq.common.config.StoreConfig;
 import com.automq.rocketmq.common.exception.RocketMQException;
+import com.automq.rocketmq.test.conf.BasicConfig;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
+import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.introspector.BeanAccess;
 
-public class BrokerConfigFactory {
+public class BrokerConfigFactory extends BasicConfig {
+
 
     /**
      * 产生一个Broker的BrokerConfig，详细参数见方法体
@@ -73,17 +77,17 @@ public class BrokerConfigFactory {
 
         S3StreamConfig s3StreamConfig = brokerConfig.s3Stream();
         s3StreamConfig.setS3WALPath("/tmp/s3rocketmq/wal");
-        s3StreamConfig.setS3Endpoint("http://minio.hellocorp.test");
-        s3StreamConfig.setS3Bucket("lzh");
-        s3StreamConfig.setS3Region("us-east-1");
+        s3StreamConfig.setS3Endpoint(LOCALSTACK.getEndpoint().toString());
+        s3StreamConfig.setS3Bucket(LocalStackFactory.getBucketName());
+        s3StreamConfig.setS3Region(LOCALSTACK.getRegion());
         s3StreamConfig.setS3ForcePathStyle(true);
-        s3StreamConfig.setS3AccessKey("kicaSWtNBPf7XCCsdW8Z");
-        s3StreamConfig.setS3SecretKey("dgWxasHBEQBBXxAxBpFmp4VWIoQ0XyDU3gGdFnaT");
+        s3StreamConfig.setS3AccessKey(LOCALSTACK.getAccessKey());
+        s3StreamConfig.setS3SecretKey(LOCALSTACK.getSecretKey());
 
         DatabaseConfig databaseConfig = brokerConfig.db();
-        databaseConfig.setUrl("jdbc:mysql://localhost:3306/metadata");
-        databaseConfig.setUserName("root");
-        databaseConfig.setPassword("root");
+        databaseConfig.setUrl(MYSQL.getJdbcUrl());
+        databaseConfig.setUserName(MYSQL.getUsername());
+        databaseConfig.setPassword(MYSQL.getPassword());
 
         brokerConfig.initEnvVar();
         try {
@@ -161,17 +165,17 @@ public class BrokerConfigFactory {
 
         S3StreamConfig s3StreamConfig = brokerConfig.s3Stream();
         s3StreamConfig.setS3WALPath("/tmp/s3rocketmq/%s/%s/wal".formatted(uuid, idx));
-        s3StreamConfig.setS3Endpoint("http://minio.hellocorp.test");
-        s3StreamConfig.setS3Bucket("lzh");
-        s3StreamConfig.setS3Region("us-east-1");
+        s3StreamConfig.setS3Endpoint(LOCALSTACK.getEndpoint().toString());
+        s3StreamConfig.setS3Bucket(LocalStackFactory.getBucketName());
+        s3StreamConfig.setS3Region(LOCALSTACK.getRegion());
         s3StreamConfig.setS3ForcePathStyle(true);
-        s3StreamConfig.setS3AccessKey("kicaSWtNBPf7XCCsdW8Z");
-        s3StreamConfig.setS3SecretKey("dgWxasHBEQBBXxAxBpFmp4VWIoQ0XyDU3gGdFnaT");
+        s3StreamConfig.setS3AccessKey(LOCALSTACK.getAccessKey());
+        s3StreamConfig.setS3SecretKey(LOCALSTACK.getSecretKey());
 
         DatabaseConfig databaseConfig = brokerConfig.db();
-        databaseConfig.setUrl("jdbc:mysql://localhost:3306/metadata");
-        databaseConfig.setUserName("root");
-        databaseConfig.setPassword("root");
+        databaseConfig.setUrl(MYSQL.getJdbcUrl());
+        databaseConfig.setUserName(MYSQL.getUsername());
+        databaseConfig.setPassword(MYSQL.getPassword());
 
         StoreConfig storeConfig = brokerConfig.store();
         storeConfig.setKvPath("/tmp/rocketmq/%s/%s/kvstore".formatted(uuid, idx));

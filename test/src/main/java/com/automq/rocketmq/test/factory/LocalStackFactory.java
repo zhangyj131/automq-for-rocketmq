@@ -15,12 +15,29 @@ import static org.testcontainers.containers.localstack.LocalStackContainer.Servi
 public class LocalStackFactory {
     private static final DockerImageName LOCALSTACK_IMAGE;
     private static final LocalStackContainer LOCALSTACK;
+    private static final String BUCKET_NAME;
+
+    public static String getBucketName() {
+        return BUCKET_NAME;
+    }
 
     static {
         LOCALSTACK_IMAGE = DockerImageName.parse("localstack/localstack:0.11.3");
         LOCALSTACK = new LocalStackContainer(LOCALSTACK_IMAGE).withServices(S3);
+        BUCKET_NAME = "test-bucket";
     }
 
+    /**
+     * AK:       accesskey
+     * <br>
+     * SK:       secretkey
+     * <br>
+     * Region:   us-east-1
+     * <br>
+     * EndPoint: http://127.0.0.1:xxxx
+     * <br>
+     * @return LocalStackContainer
+     */
     public static LocalStackContainer getInstance() {
         return LOCALSTACK;
     }
@@ -47,7 +64,7 @@ public class LocalStackFactory {
             .endpointOverride(endpoint)
             .build();
 
-        CreateBucketRequest createBucketRequest = CreateBucketRequest.builder().bucket("test-bucket").build();
+        CreateBucketRequest createBucketRequest = CreateBucketRequest.builder().bucket(BUCKET_NAME).build();
         s3.createBucket(createBucketRequest);
     }
 }

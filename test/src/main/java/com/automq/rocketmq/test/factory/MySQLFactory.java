@@ -12,6 +12,17 @@ public class MySQLFactory {
         MYSQL = new MySQLContainer(MYSQL_IMAGE);
     }
 
+    /**
+     * username:    test
+     * <br>
+     * password:    test
+     * <br>
+     * url:         jdbc:mysql://localhost:xxxx/test
+     * <br>
+     * database:    test
+     * <br>
+     * @return MySQLContainer
+     */
     public static MySQLContainer getInstance() {
         return MYSQL;
     }
