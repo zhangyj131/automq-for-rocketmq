@@ -17,8 +17,10 @@
 
 package com.automq.stream.s3.wal.benchmark;
 
+import com.automq.stream.s3.DirectByteBufAlloc;
 import com.automq.stream.s3.wal.BlockWALService;
 import com.automq.stream.s3.wal.WriteAheadLog;
+import com.automq.stream.s3.wal.util.WALChannel;
 import com.automq.stream.utils.ThreadUtils;
 import com.automq.stream.utils.Threads;
 import io.netty.buffer.ByteBuf;
@@ -30,8 +32,11 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
 import java.io.IOException;
+import java.util.NavigableSet;
 import java.util.Random;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
@@ -43,9 +48,10 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class WriteBench implements AutoCloseable {
     private static final int LOG_INTERVAL_SECONDS = 1;
+    private static final int TRIM_INTERVAL_MILLIS = 100;
 
     private final WriteAheadLog log;
-    private final FlushedOffset flushedOffset = new FlushedOffset();
+    private final TrimOffset trimOffset = new TrimOffset();
 
     public WriteBench(Config config) throws IOException {
         BlockWALService.BlockWALServiceBuilder builder = BlockWALService.builder(config.path, config.capacity);
@@ -70,9 +76,25 @@ public class WriteBench implements AutoCloseable {
         }
         Config config = new Config(ns);
 
+        resetWALHeader(config.path);
         try (WriteBench bench = new WriteBench(config)) {
             bench.run(config);
         }
+    }
+
+    private static void resetWALHeader(String path) throws IOException {
+        if (!path.startsWith(WALChannel.WALChannelBuilder.DEVICE_PREFIX)) {
+            return;
+        }
+        System.out.println("Resetting WAL header");
+        int capacity = BlockWALService.WAL_HEADER_TOTAL_CAPACITY;
+        WALChannel channel = WALChannel.builder(path).capacity(capacity).build();
+        channel.open();
+        ByteBuf buf = DirectByteBufAlloc.byteBuffer(capacity);
+        buf.writeZero(capacity);
+        channel.write(buf, 0);
+        buf.release();
+        channel.close();
     }
 
     private void run(Config config) {
@@ -81,17 +103,20 @@ public class WriteBench implements AutoCloseable {
         ExecutorService executor = Threads.newFixedThreadPool(
                 config.threads, ThreadUtils.createThreadFactory("append-thread-%d", false), null);
         AppendTaskConfig appendTaskConfig = new AppendTaskConfig(config);
+        Stat stat = new Stat();
+        runTrimTask();
         for (int i = 0; i < config.threads; i++) {
             int index = i;
             executor.submit(() -> {
                 try {
-                    runAppendTask(index, appendTaskConfig);
+                    runAppendTask(index, appendTaskConfig, stat);
                 } catch (Exception e) {
                     System.err.printf("Append task %d failed, %s\n", index, e.getMessage());
                     e.printStackTrace();
                 }
             });
         }
+        logIt(config, stat);
 
         executor.shutdown();
         try {
@@ -105,7 +130,20 @@ public class WriteBench implements AutoCloseable {
         System.out.println("Benchmark finished");
     }
 
-    private void runAppendTask(int index, AppendTaskConfig config) throws Exception {
+    private void runTrimTask() {
+        ScheduledExecutorService trimExecutor = Threads.newSingleThreadScheduledExecutor(
+                ThreadUtils.createThreadFactory("trim-thread-%d", true), null);
+        trimExecutor.scheduleAtFixedRate(() -> {
+            try {
+                log.trim(trimOffset.get());
+            } catch (Exception e) {
+                System.err.printf("Trim task failed, %s\n", e.getMessage());
+                e.printStackTrace();
+            }
+        }, TRIM_INTERVAL_MILLIS, TRIM_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
+    }
+
+    private void runAppendTask(int index, AppendTaskConfig config, Stat stat) throws Exception {
         System.out.printf("Append task %d started\n", index);
 
         byte[] bytes = new byte[config.recordSizeBytes];
@@ -113,18 +151,14 @@ public class WriteBench implements AutoCloseable {
         ByteBuf payload = Unpooled.wrappedBuffer(bytes).retain();
         int intervalNanos = (int) TimeUnit.SECONDS.toNanos(1) / Math.max(1, config.throughputBytes / config.recordSizeBytes);
         long lastAppendTimeNanos = System.nanoTime();
-        long lastLogTimeMillis = System.currentTimeMillis();
         long taskStartTimeMillis = System.currentTimeMillis();
-        AtomicLong count = new AtomicLong();
-        AtomicLong costNanos = new AtomicLong();
-        AtomicLong maxCostNanos = new AtomicLong();
 
         while (true) {
             while (true) {
                 long now = System.nanoTime();
                 long elapsedNanos = now - lastAppendTimeNanos;
                 if (elapsedNanos >= intervalNanos) {
-                    lastAppendTimeNanos = now;
+                    lastAppendTimeNanos += intervalNanos;
                     break;
                 }
                 LockSupport.parkNanos((intervalNanos - elapsedNanos) >> 2);
@@ -135,35 +169,19 @@ public class WriteBench implements AutoCloseable {
                 break;
             }
 
-            if (now - lastLogTimeMillis > TimeUnit.SECONDS.toMillis(LOG_INTERVAL_SECONDS)) {
-                long countValue = count.getAndSet(0);
-                long costNanosValue = costNanos.getAndSet(0);
-                long maxCostNanosValue = maxCostNanos.getAndSet(0);
-                if (0 != countValue) {
-                    System.out.printf("Append task %d | Append Rate %d msg/s %d KB/s | Avg Latency %.3f ms | Max Latency %.3f ms\n",
-                            index,
-                            countValue / LOG_INTERVAL_SECONDS,
-                            (countValue * config.recordSizeBytes) / LOG_INTERVAL_SECONDS / 1024,
-                            costNanosValue / 1_000_000.0 / countValue,
-                            maxCostNanosValue / 1_000_000.0);
-                    lastLogTimeMillis = now;
-                }
-            }
-
             long appendStartTimeNanos = System.nanoTime();
             WriteAheadLog.AppendResult result;
             try {
                 result = log.append(payload.retainedDuplicate());
             } catch (WriteAheadLog.OverCapacityException e) {
-                log.trim(flushedOffset.get());
+                System.err.printf("Append task %d failed, retry it, %s\n", index, e.getMessage());
                 continue;
             }
+            trimOffset.appended(result.recordOffset());
             result.future().thenAccept(v -> {
                 long costNanosValue = System.nanoTime() - appendStartTimeNanos;
-                count.incrementAndGet();
-                costNanos.addAndGet(costNanosValue);
-                maxCostNanos.accumulateAndGet(costNanosValue, Math::max);
-                flushedOffset.update(v.flushedOffset());
+                stat.update(costNanosValue);
+                trimOffset.flushed(v.flushedOffset());
             }).whenComplete((v, e) -> {
                 if (e != null) {
                     System.err.printf("Append task %d failed, %s\n", index, e.getMessage());
@@ -173,6 +191,21 @@ public class WriteBench implements AutoCloseable {
         }
 
         System.out.printf("Append task %d finished\n", index);
+    }
+
+    private static void logIt(Config config, Stat stat) {
+        ScheduledExecutorService statExecutor = Threads.newSingleThreadScheduledExecutor(
+                ThreadUtils.createThreadFactory("stat-thread-%d", true), null);
+        statExecutor.scheduleAtFixedRate(() -> {
+            Stat.Result result = stat.reset();
+            if (0 != result.count()) {
+                System.out.printf("Append task | Append Rate %d msg/s %d KB/s | Avg Latency %.3f ms | Max Latency %.3f ms\n",
+                        TimeUnit.SECONDS.toNanos(1) * result.count() / result.elapsedTimeNanos(),
+                        TimeUnit.SECONDS.toNanos(1) * (result.count() * config.recordSizeBytes) / result.elapsedTimeNanos() / 1024,
+                        (double) result.costNanos() / TimeUnit.MILLISECONDS.toNanos(1) / result.count(),
+                        (double) result.maxCostNanos() / TimeUnit.MILLISECONDS.toNanos(1));
+            }
+        }, LOG_INTERVAL_SECONDS, LOG_INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 
     @Override
@@ -251,19 +284,60 @@ public class WriteBench implements AutoCloseable {
         }
     }
 
-    public static class FlushedOffset {
+    static class Stat {
+        final AtomicLong count = new AtomicLong();
+        final AtomicLong costNanos = new AtomicLong();
+        final AtomicLong maxCostNanos = new AtomicLong();
+        long lastResetTimeNanos = System.nanoTime();
+
+        public void update(long costNanosValue) {
+            count.incrementAndGet();
+            costNanos.addAndGet(costNanosValue);
+            maxCostNanos.accumulateAndGet(costNanosValue, Math::max);
+        }
+
+        /**
+         * NOT thread-safe
+         */
+        public Result reset() {
+            long countValue = count.getAndSet(0);
+            long costNanosValue = costNanos.getAndSet(0);
+            long maxCostNanosValue = maxCostNanos.getAndSet(0);
+
+            long now = System.nanoTime();
+            long elapsedTimeNanos = now - lastResetTimeNanos;
+            lastResetTimeNanos = now;
+
+            return new Result(countValue, costNanosValue, maxCostNanosValue, elapsedTimeNanos);
+        }
+
+        public record Result(long count, long costNanos, long maxCostNanos, long elapsedTimeNanos) {
+        }
+    }
+
+    public static class TrimOffset {
         private final Lock lock = new ReentrantLock();
+        // Offsets of all data appended but not yet flushed to disk
+        private final NavigableSet<Long> appendedOffsets = new ConcurrentSkipListSet<>();
         // Offset before which all data has been flushed to disk
-        private long flushedOffset = 0;
+        private long flushedOffset = -1;
         // Offset at which all data has been flushed to disk
         private long committedOffset = -1;
 
-        public void update(long offset) {
+        public void appended(long offset) {
+            appendedOffsets.add(offset);
+        }
+
+        public void flushed(long offset) {
             lock.lock();
             try {
                 if (offset > flushedOffset) {
-                    committedOffset = flushedOffset;
                     flushedOffset = offset;
+                    Long lower = appendedOffsets.lower(flushedOffset);
+                    if (lower != null) {
+                        appendedOffsets.headSet(lower).clear();
+                        committedOffset = lower;
+                    }
                 }
             } finally {
                 lock.unlock();

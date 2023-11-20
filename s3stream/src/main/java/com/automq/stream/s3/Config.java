@@ -19,7 +19,7 @@ package com.automq.stream.s3;
 
 // TODO: rename & init
 public class Config {
-    private int brokerId;
+    private int nodeId;
     private String endpoint;
     private String region;
     private String bucket;
@@ -34,7 +34,8 @@ public class Config {
     private long walWindowInitial = 1048576L;
     private long walWindowIncrement = 4194304L;
     private long walWindowMax = 536870912L;
-    private long walBlockSoftLimit = 128 * 1024;
+    private long walBlockSoftLimit = 256 * 1024;
+    private int walWriteRateLimit = 3000;
     private long walUploadThreshold = 100 * 1024 * 1024;
     private int streamSplitSize = 16777216;
     private int objectBlockSize = 8388608;
@@ -45,7 +46,7 @@ public class Config {
     private int streamObjectCompactionLivingTimeMinutes = 60;
     private int controllerRequestRetryMaxCount = Integer.MAX_VALUE;
     private long controllerRequestRetryBaseDelayMs = 500;
-    private long brokerEpoch = 0L;
+    private long nodeEpoch = 0L;
     private int streamSetObjectCompactionInterval = 20;
     private long streamSetObjectCompactionCacheSize = 200 * 1024 * 1024;
     private int streamSetObjectCompactionUploadConcurrency = 8;
@@ -59,9 +60,11 @@ public class Config {
     // 100MB/s
     private long networkBaselineBandwidth = 100 * 1024 * 1024;
     private int refillPeriodMs = 1000;
+    private long objectRetentionTimeInSecond = 10 * 60; // 10min
+    private boolean failoverEnable = false;
 
-    public int brokerId() {
-        return brokerId;
+    public int nodeId() {
+        return nodeId;
     }
 
     public String endpoint() {
@@ -116,6 +119,10 @@ public class Config {
         return walBlockSoftLimit;
     }
 
+    public int walWriteRateLimit() {
+        return walWriteRateLimit;
+    }
+
     public long walUploadThreshold() {
         return walUploadThreshold;
     }
@@ -156,8 +163,8 @@ public class Config {
         return controllerRequestRetryBaseDelayMs;
     }
 
-    public long brokerEpoch() {
-        return brokerEpoch;
+    public long nodeEpoch() {
+        return nodeEpoch;
     }
 
     public int streamSetObjectCompactionInterval() {
@@ -216,8 +223,8 @@ public class Config {
         return refillPeriodMs;
     }
 
-    public Config brokerId(int brokerId) {
-        this.brokerId = brokerId;
+    public Config nodeId(int brokerId) {
+        this.nodeId = brokerId;
         return this;
     }
 
@@ -286,6 +293,11 @@ public class Config {
         return this;
     }
 
+    public Config walWriteRateLimit(int s3WALWriteRateLimit) {
+        this.walWriteRateLimit = s3WALWriteRateLimit;
+        return this;
+    }
+
     public Config walUploadThreshold(long s3WALObjectSize) {
         this.walUploadThreshold = s3WALObjectSize;
         return this;
@@ -336,8 +348,8 @@ public class Config {
         return this;
     }
 
-    public Config brokerEpoch(long brokerEpoch) {
-        this.brokerEpoch = brokerEpoch;
+    public Config nodeEpoch(long brokerEpoch) {
+        this.nodeEpoch = brokerEpoch;
         return this;
     }
 
@@ -410,4 +422,23 @@ public class Config {
         this.refillPeriodMs = refillPeriodMs;
         return this;
     }
+
+    public Config objectRetentionTimeInSecond(long seconds) {
+        objectRetentionTimeInSecond = seconds;
+        return this;
+    }
+
+    public long objectRetentionTimeInSecond() {
+        return objectRetentionTimeInSecond;
+    }
+
+    public Config failoverEnable(boolean failoverEnable) {
+        this.failoverEnable = failoverEnable;
+        return this;
+    }
+
+    public boolean failoverEnable() {
+        return failoverEnable;
+    }
+
 }

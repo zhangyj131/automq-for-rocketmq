@@ -50,7 +50,7 @@ import apache.rocketmq.controller.v1.ListTopicsRequest;
 import apache.rocketmq.controller.v1.MessageQueue;
 import apache.rocketmq.controller.v1.NodeRegistrationReply;
 import apache.rocketmq.controller.v1.NodeRegistrationRequest;
-import apache.rocketmq.controller.v1.Code;
+import apache.rocketmq.common.v1.Code;
 import apache.rocketmq.controller.v1.ControllerServiceGrpc;
 import apache.rocketmq.controller.v1.NotifyMessageQueuesAssignableReply;
 import apache.rocketmq.controller.v1.NotifyMessageQueuesAssignableRequest;
@@ -197,8 +197,7 @@ public class GrpcControllerClient implements ControllerClient {
     }
 
     @Override
-    public CompletableFuture<Long> createTopic(String target, CreateTopicRequest request)
-        throws ControllerException {
+    public CompletableFuture<Long> createTopic(String target, CreateTopicRequest request) {
         ControllerServiceGrpc.ControllerServiceFutureStub stub;
         try {
             stub = getOrCreateStubForTarget(target);

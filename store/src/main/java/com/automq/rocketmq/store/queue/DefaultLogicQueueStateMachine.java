@@ -36,14 +36,12 @@ import com.automq.rocketmq.store.service.TimerService;
 import com.automq.rocketmq.store.service.api.KVService;
 import com.automq.rocketmq.store.util.SerializeUtil;
 import com.automq.stream.utils.FutureUtil;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -68,9 +66,9 @@ public class DefaultLogicQueueStateMachine implements MessageStateMachine {
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultLogicQueueStateMachine.class);
     private final long topicId;
     private final int queueId;
-    private Map<Long/*consumerGroup*/, ConsumerGroupMetadata> consumerGroupMetadataMap;
-    private final Map<Long/*consumerGroup*/, AckCommitter> ackCommitterMap = new HashMap<>();
-    private final Map<Long/*consumerGroup*/, AckCommitter> retryAckCommitterMap = new HashMap<>();
+    private ConcurrentMap<Long/*consumerGroup*/, ConsumerGroupMetadata> consumerGroupMetadataMap;
+    private final ConcurrentMap<Long/*consumerGroup*/, AckCommitter> ackCommitterMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long/*consumerGroup*/, AckCommitter> retryAckCommitterMap = new ConcurrentHashMap<>();
     private long currentOperationOffset = -1;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final Lock reentrantLock = lock.readLock();
@@ -285,27 +283,32 @@ public class DefaultLogicQueueStateMachine implements MessageStateMachine {
     }
 
     private AckCommitter getAckCommitter(long consumerGroupId) {
-        return getAckCommitter(consumerGroupId, new RoaringBitmap());
+        return getAckCommitter(consumerGroupId, null);
     }
 
-    private AckCommitter getAckCommitter(long consumerGroupId, RoaringBitmap bitmap) {
+    private AckCommitter getAckCommitter(long consumerGroupId, ByteBuffer serializedBitmapBuffer) {
         ConsumerGroupMetadata metadata = this.consumerGroupMetadataMap.computeIfAbsent(consumerGroupId, k -> new ConsumerGroupMetadata(consumerGroupId));
-        return this.ackCommitterMap.computeIfAbsent(consumerGroupId, k -> new AckCommitter(metadata.getAckOffset(), offset -> {
-            metadata.setAckOffset(offset);
-            this.ackOffsetListeners.forEach(listener -> listener.onOffset(consumerGroupId, offset));
-        }, bitmap));
+        return this.ackCommitterMap.computeIfAbsent(consumerGroupId, k ->
+            new AckCommitter(
+                metadata.getAckOffset(),
+                offset -> {
+                    metadata.setAckOffset(offset);
+                    this.ackOffsetListeners.forEach(listener -> listener.onOffset(consumerGroupId, offset));
+                },
+                serializedBitmapBuffer
+            ));
     }
 
     private AckCommitter getRetryAckCommitter(long consumerGroupId) {
-        return getRetryAckCommitter(consumerGroupId, new RoaringBitmap());
+        return getRetryAckCommitter(consumerGroupId, null);
     }
 
-    private AckCommitter getRetryAckCommitter(long consumerGroupId, RoaringBitmap bitmap) {
+    private AckCommitter getRetryAckCommitter(long consumerGroupId, ByteBuffer serializedBitmapBuffer) {
         ConsumerGroupMetadata metadata = this.consumerGroupMetadataMap.computeIfAbsent(consumerGroupId, k -> new ConsumerGroupMetadata(consumerGroupId));
         return this.retryAckCommitterMap.computeIfAbsent(consumerGroupId, k -> new AckCommitter(metadata.getRetryAckOffset(), offset -> {
             metadata.setRetryAckOffset(offset);
             this.retryAckOffsetListeners.forEach(listener -> listener.onOffset(consumerGroupId, offset));
-        }, bitmap));
+        }, serializedBitmapBuffer));
     }
 
     @Override
@@ -408,11 +411,11 @@ public class DefaultLogicQueueStateMachine implements MessageStateMachine {
         long consumerGroupId = operation.consumerGroupId();
         long newConsumeOffset = operation.offset();
         long topicId = operation.topicId();
-        int queuedId = operation.queueId();
+        int queueId = operation.queueId();
         long operationTimestamp = operation.operationTimestamp();
 
         LOGGER.trace("Replay reset consume offset operation: topicId={}, queueId={}, consumerGroupId={}, newConsumeOffset={}, operationTimestamp={} at offset: {}",
-            topicId, queuedId, consumerGroupId, newConsumeOffset, operationTimestamp, operationOffset);
+            topicId, queueId, consumerGroupId, newConsumeOffset, operationTimestamp, operationOffset);
         reentrantLock.lock();
         try {
             currentOperationOffset = operationOffset;
@@ -422,6 +425,9 @@ public class DefaultLogicQueueStateMachine implements MessageStateMachine {
                 metadata.getConsumerGroupId(), newConsumeOffset, newConsumeOffset, metadata.getRetryConsumeOffset(), metadata.getRetryAckOffset(),
                 new ConcurrentSkipListMap<>(), operationOffset);
             this.consumerGroupMetadataMap.put(consumerGroupId, newMetadata);
+
+            // Remove old ack committer to avoid advance the ack offset to old group-metadata.
+            this.ackCommitterMap.remove(consumerGroupId);
 
             // Delete all check points and related states about this consumer group
             List<CheckPoint> checkPoints = new ArrayList<>();
@@ -527,15 +533,11 @@ public class DefaultLogicQueueStateMachine implements MessageStateMachine {
         exclusiveLock.lock();
         try {
             List<OperationSnapshot.ConsumerGroupMetadataSnapshot> metadataSnapshots = consumerGroupMetadataMap.values().stream().map(metadata -> {
-                try {
-                    return new OperationSnapshot.ConsumerGroupMetadataSnapshot(metadata.getConsumerGroupId(), metadata.getConsumeOffset(), metadata.getAckOffset(),
-                        metadata.getRetryConsumeOffset(), metadata.getRetryAckOffset(),
-                        getAckCommitter(metadata.getConsumerGroupId()).getAckBitmapBuffer().array(),
-                        getRetryAckCommitter(metadata.getConsumerGroupId()).getAckBitmapBuffer().array(),
-                        metadata.getConsumeTimes(), metadata.getVersion());
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+                return new OperationSnapshot.ConsumerGroupMetadataSnapshot(metadata.getConsumerGroupId(), metadata.getConsumeOffset(), metadata.getAckOffset(),
+                    metadata.getRetryConsumeOffset(), metadata.getRetryAckOffset(),
+                    getAckCommitter(metadata.getConsumerGroupId()).getSerializedBuffer().array(),
+                    getRetryAckCommitter(metadata.getConsumerGroupId()).getSerializedBuffer().array(),
+                    metadata.getConsumeTimes(), metadata.getVersion());
             }).collect(Collectors.toList());
             long snapshotVersion = kvService.takeSnapshot();
             OperationSnapshot snapshot = new OperationSnapshot(currentOperationOffset, snapshotVersion, metadataSnapshots);
@@ -549,16 +551,14 @@ public class DefaultLogicQueueStateMachine implements MessageStateMachine {
     public void loadSnapshot(OperationSnapshot snapshot) {
         exclusiveLock.lock();
         try {
-            this.consumerGroupMetadataMap = snapshot.getConsumerGroupMetadataList().stream().collect(Collectors.toMap(
+            this.consumerGroupMetadataMap = snapshot.getConsumerGroupMetadataList().stream().collect(Collectors.toConcurrentMap(
                 ConsumerGroupMetadata::getConsumerGroupId, metadataSnapshot ->
                     new ConsumerGroupMetadata(metadataSnapshot.getConsumerGroupId(), metadataSnapshot.getConsumeOffset(), metadataSnapshot.getAckOffset(),
                         metadataSnapshot.getRetryConsumeOffset(), metadataSnapshot.getRetryAckOffset(), metadataSnapshot.getConsumeTimes(),
                         metadataSnapshot.getVersion())));
             snapshot.getConsumerGroupMetadataList().forEach(metadataSnapshot -> {
-                RoaringBitmap bitmap = new RoaringBitmap(new ImmutableRoaringBitmap(ByteBuffer.wrap(metadataSnapshot.getAckOffsetBitmapBuffer())));
-                getAckCommitter(metadataSnapshot.getConsumerGroupId(), bitmap);
-                RoaringBitmap retryBitmap = new RoaringBitmap(new ImmutableRoaringBitmap(ByteBuffer.wrap(metadataSnapshot.getRetryAckOffsetBitmapBuffer())));
-                getRetryAckCommitter(metadataSnapshot.getConsumerGroupId(), retryBitmap);
+                getAckCommitter(metadataSnapshot.getConsumerGroupId(), ByteBuffer.wrap(metadataSnapshot.getAckOffsetBitmapBuffer()));
+                getRetryAckCommitter(metadataSnapshot.getConsumerGroupId(), ByteBuffer.wrap(metadataSnapshot.getRetryAckOffsetBitmapBuffer()));
             });
             this.currentOperationOffset = snapshot.getSnapshotEndOffset();
             // recover states in kv service
@@ -637,23 +637,29 @@ public class DefaultLogicQueueStateMachine implements MessageStateMachine {
     }
 
     static class AckCommitter {
-        private long ackOffset;
+        private final long baseOffset;
+        private volatile long ackOffset;
         private final RoaringBitmap bitmap;
         private final Consumer<Long> ackAdvanceFn;
-        private final long baseOffset;
 
         public AckCommitter(long ackOffset, Consumer<Long> ackAdvanceFn) {
-            this(ackOffset, ackAdvanceFn, new RoaringBitmap());
+            this(ackOffset, ackAdvanceFn, null);
         }
 
-        public AckCommitter(long ackOffset, Consumer<Long> ackAdvanceFn, RoaringBitmap bitmap) {
+        public AckCommitter(long ackOffset, Consumer<Long> ackAdvanceFn, ByteBuffer serializedBitmap) {
             this.ackOffset = ackOffset;
             this.ackAdvanceFn = ackAdvanceFn;
-            this.bitmap = bitmap;
-            this.baseOffset = ackOffset;
+            // deserialize bitmap
+            if (serializedBitmap == null || !serializedBitmap.hasRemaining()) {
+                this.baseOffset = ackOffset;
+                this.bitmap = new RoaringBitmap();
+            } else {
+                this.baseOffset = serializedBitmap.getLong();
+                this.bitmap = new RoaringBitmap(new ImmutableRoaringBitmap(serializedBitmap));
+            }
         }
 
-        public void commitAck(long offset) {
+        public synchronized void commitAck(long offset) {
             if (offset >= ackOffset) {
                 // TODO: how to handle overflow?
                 int offsetInBitmap = (int) (offset - baseOffset);
@@ -669,9 +675,11 @@ public class DefaultLogicQueueStateMachine implements MessageStateMachine {
             }
         }
 
-        public ByteBuffer getAckBitmapBuffer() throws IOException {
-            int length = bitmap.serializedSizeInBytes();
+        // <baseOffset>/<bitmap>
+        public synchronized ByteBuffer getSerializedBuffer() {
+            int length = bitmap.serializedSizeInBytes() + Long.BYTES;
             ByteBuffer buffer = ByteBuffer.allocate(length);
+            buffer.putLong(baseOffset);
             bitmap.serialize(buffer);
             // Flip buffer to prepare read
             buffer.flip();

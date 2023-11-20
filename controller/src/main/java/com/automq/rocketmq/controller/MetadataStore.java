@@ -35,9 +35,9 @@ import com.automq.rocketmq.common.api.DataStore;
 import com.automq.rocketmq.common.config.ControllerConfig;
 import com.automq.rocketmq.common.exception.ControllerException;
 import com.automq.rocketmq.controller.server.store.BrokerNode;
-import com.automq.rocketmq.controller.server.store.Role;
+import com.automq.rocketmq.controller.server.store.ElectionService;
+import com.automq.rocketmq.controller.server.store.impl.TopicManager;
 import com.automq.rocketmq.metadata.dao.Group;
-import com.automq.rocketmq.metadata.dao.Lease;
 import com.automq.rocketmq.metadata.dao.Node;
 import com.automq.rocketmq.metadata.dao.QueueAssignment;
 import com.automq.rocketmq.metadata.dao.Stream;
@@ -73,13 +73,16 @@ public interface MetadataStore extends Closeable {
 
     void addBrokerNode(Node node);
 
-    void setLease(Lease lease);
-
-    void setRole(Role role);
 
     DataStore getDataStore();
 
     void setDataStore(DataStore dataStore);
+
+    ElectionService electionService();
+
+    List<QueueAssignment> assignmentsOf(int nodeId);
+
+    List<Long> streamsOf(long topicId, int queueId);
 
     void start();
 
@@ -133,7 +136,7 @@ public interface MetadataStore extends Closeable {
 
     boolean hasAliveBrokerNodes();
 
-    String leaderAddress() throws ControllerException;
+    Optional<String> leaderAddress();
 
     /**
      * List queue assignments according to criteria.
@@ -217,4 +220,8 @@ public interface MetadataStore extends Closeable {
     CompletableFuture<DescribeStreamReply> describeStream(DescribeStreamRequest request);
 
     TerminationStage fireClose();
+
+    TopicManager topicManager();
+
+    Optional<BrokerNode> getNode(int nodeId);
 }

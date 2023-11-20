@@ -17,6 +17,8 @@
 
 package com.automq.stream.api;
 
+import com.automq.stream.s3.cache.CacheAccessType;
+
 import java.util.List;
 
 public interface FetchResult {
@@ -27,6 +29,10 @@ public interface FetchResult {
      * @return {@link RecordBatchWithContext} list.
      */
     List<RecordBatchWithContext> recordBatchList();
+
+    default CacheAccessType getCacheAccessType() {
+        return CacheAccessType.DELTA_WAL_CACHE_HIT;
+    }
 
     /**
      * Free fetch result backend memory.

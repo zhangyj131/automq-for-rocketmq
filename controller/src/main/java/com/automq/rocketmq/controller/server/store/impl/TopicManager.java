@@ -19,7 +19,7 @@ package com.automq.rocketmq.controller.server.store.impl;
 
 import apache.rocketmq.controller.v1.AcceptTypes;
 import apache.rocketmq.controller.v1.AssignmentStatus;
-import apache.rocketmq.controller.v1.Code;
+import apache.rocketmq.common.v1.Code;
 import apache.rocketmq.controller.v1.CreateTopicRequest;
 import apache.rocketmq.controller.v1.GroupStatus;
 import apache.rocketmq.controller.v1.StreamRole;
@@ -87,6 +87,14 @@ public class TopicManager {
         this.streamCache = new StreamCache();
         this.topicIdRequests = new ConcurrentHashMap<>();
         this.topicNameRequests = new ConcurrentHashMap<>();
+    }
+
+    public Optional<String> nameOf(long topicId) {
+        apache.rocketmq.controller.v1.Topic topic = topicCache.byId(topicId);
+        if (null == topic) {
+            return Optional.empty();
+        }
+        return Optional.of(topic.getName());
     }
 
     public TopicCache getTopicCache() {
@@ -163,17 +171,17 @@ public class TopicManager {
                 }
                 return future;
             } else {
-                try {
-                    metadataStore.controllerClient().createTopic(metadataStore.leaderAddress(), request).whenComplete((res, e) -> {
-                        if (null != e) {
-                            future.completeExceptionally(e);
-                        } else {
-                            future.complete(res);
-                        }
-                    });
-                } catch (ControllerException e) {
-                    future.completeExceptionally(e);
+                Optional<String> leaderAddress = metadataStore.electionService().leaderAddress();
+                if (leaderAddress.isEmpty()) {
+                    return CompletableFuture.failedFuture(new ControllerException(Code.NO_LEADER_VALUE, "No leader is elected yet"));
                 }
+                metadataStore.controllerClient().createTopic(leaderAddress.get(), request).whenComplete((res, e) -> {
+                    if (null != e) {
+                        future.completeExceptionally(e);
+                    } else {
+                        future.complete(res);
+                    }
+                });
             }
             break;
         }
@@ -249,17 +257,17 @@ public class TopicManager {
                     future.completeExceptionally(e);
                 }
             } else {
-                try {
-                    metadataStore.controllerClient().updateTopic(metadataStore.leaderAddress(), request).whenComplete((topic, e) -> {
-                        if (null != e) {
-                            future.completeExceptionally(e);
-                        } else {
-                            future.complete(topic);
-                        }
-                    });
-                } catch (ControllerException e) {
-                    future.completeExceptionally(e);
+                Optional<String> leaderAddress = metadataStore.electionService().leaderAddress();
+                if (leaderAddress.isEmpty()) {
+                    return CompletableFuture.failedFuture(new ControllerException(Code.NO_LEADER_VALUE, "No leader is elected yet"));
                 }
+                metadataStore.controllerClient().updateTopic(leaderAddress.get(), request).whenComplete((topic, e) -> {
+                    if (null != e) {
+                        future.completeExceptionally(e);
+                    } else {
+                        future.complete(topic);
+                    }
+                });
             }
             break;
         }
@@ -328,11 +336,11 @@ public class TopicManager {
                     notifyOnResourceChange(toNotify);
                     return null;
                 } else {
-                    try {
-                        return metadataStore.controllerClient().deleteTopic(metadataStore.leaderAddress(), topicId).join();
-                    } catch (ControllerException e) {
-                        throw new CompletionException(e);
+                    Optional<String> leaderAddress = metadataStore.electionService().leaderAddress();
+                    if (leaderAddress.isEmpty()) {
+                        throw new CompletionException(new ControllerException(Code.NO_LEADER_VALUE, "No leader is elected yet"));
                     }
+                    return metadataStore.controllerClient().deleteTopic(leaderAddress.get(), topicId).join();
                 }
             }
         }, metadataStore.asyncExecutor());
@@ -366,26 +374,24 @@ public class TopicManager {
         }
     }
 
-    public CompletableFuture<apache.rocketmq.controller.v1.Topic> describeTopic(Long topicId,
-        String topicName) {
-
+    public CompletableFuture<apache.rocketmq.controller.v1.Topic> describeTopic(Long topicId, String topicName) {
         // Look up cache first
-        Topic topicMetadataCache = null;
-        if (null != topicId) {
-            topicMetadataCache = this.topicCache.byId(topicId);
-        }
-        if (null == topicMetadataCache && null != topicName) {
-            topicMetadataCache = this.topicCache.byName(topicName);
-        }
-        if (null != topicMetadataCache) {
-            Map<Integer, QueueAssignment> assignmentMap = assignmentCache.byTopicId(topicMetadataCache.getId());
-            if (null != assignmentMap && !assignmentMap.isEmpty()) {
-                try {
-                    apache.rocketmq.controller.v1.Topic topic =
-                        Helper.buildTopic(topicMetadataCache, assignmentMap.values());
-                    return CompletableFuture.completedFuture(topic);
-                } catch (InvalidProtocolBufferException e) {
-                    return CompletableFuture.failedFuture(e);
+        {
+            apache.rocketmq.controller.v1.Topic topic = null;
+            if (null != topicId) {
+                topic = topicCache.byId(topicId);
+            }
+
+            if (null == topic && null != topicName) {
+                topic = topicCache.byName(topicName);
+            }
+
+            if (null != topic) {
+                Map<Integer, QueueAssignment> assignmentMap = assignmentCache.byTopicId(topic.getTopicId());
+                if (null != assignmentMap && !assignmentMap.isEmpty()) {
+                    apache.rocketmq.controller.v1.Topic.Builder topicBuilder = topic.toBuilder();
+                    Helper.setAssignments(topicBuilder, assignmentMap.values());
+                    return CompletableFuture.completedFuture(topicBuilder.build());
                 }
             }
         }

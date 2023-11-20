@@ -17,10 +17,6 @@
 
 package com.automq.stream.s3.cache;
 
-import com.automq.stream.s3.model.StreamRecordBatch;
-
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -31,6 +27,4 @@ import java.util.concurrent.CompletableFuture;
 public interface S3BlockCache {
 
     CompletableFuture<ReadDataBlock> read(long streamId, long startOffset, long endOffset, int maxBytes);
-
-    void put(Map<Long, List<StreamRecordBatch>> stream2records);
 }

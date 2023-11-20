@@ -42,6 +42,7 @@ public class LogCache {
     private static final int DEFAULT_MAX_BLOCK_STREAM_COUNT = 10000;
     private static final Consumer<LogCacheBlock> DEFAULT_BLOCK_FREE_LISTENER = block -> {
     };
+    private final long capacity;
     private final long cacheBlockMaxSize;
     private final int maxCacheBlockStreamCount;
     private final List<LogCacheBlock> blocks = new ArrayList<>();
@@ -50,7 +51,8 @@ public class LogCache {
     private final AtomicLong size = new AtomicLong();
     private final Consumer<LogCacheBlock> blockFreeListener;
 
-    public LogCache(long cacheBlockMaxSize, int maxCacheBlockStreamCount, Consumer<LogCacheBlock> blockFreeListener) {
+    public LogCache(long capacity, long cacheBlockMaxSize, int maxCacheBlockStreamCount, Consumer<LogCacheBlock> blockFreeListener) {
+        this.capacity = capacity;
         this.cacheBlockMaxSize = cacheBlockMaxSize;
         this.maxCacheBlockStreamCount = maxCacheBlockStreamCount;
         this.activeBlock = new LogCacheBlock(cacheBlockMaxSize, maxCacheBlockStreamCount);
@@ -58,20 +60,20 @@ public class LogCache {
         this.blockFreeListener = blockFreeListener;
     }
 
-    public LogCache(long cacheBlockMaxSize) {
-        this(cacheBlockMaxSize, DEFAULT_MAX_BLOCK_STREAM_COUNT, DEFAULT_BLOCK_FREE_LISTENER);
+    public LogCache(long capacity, long cacheBlockMaxSize) {
+        this(capacity, cacheBlockMaxSize, DEFAULT_MAX_BLOCK_STREAM_COUNT, DEFAULT_BLOCK_FREE_LISTENER);
     }
 
-    public LogCache(long cacheBlockMaxSize, int maxCacheBlockStreamCount) {
-        this(cacheBlockMaxSize, maxCacheBlockStreamCount, DEFAULT_BLOCK_FREE_LISTENER);
+    public LogCache(long capacity, long cacheBlockMaxSize, int maxCacheBlockStreamCount) {
+        this(capacity, cacheBlockMaxSize, maxCacheBlockStreamCount, DEFAULT_BLOCK_FREE_LISTENER);
     }
 
     public boolean put(StreamRecordBatch recordBatch) {
-        TimerUtil timerUtil = new TimerUtil(TimeUnit.MILLISECONDS);
+        TimerUtil timerUtil = new TimerUtil();
         tryRealFree();
         size.addAndGet(recordBatch.size());
         boolean full = activeBlock.put(recordBatch);
-        OperationMetricsStats.getHistogram(S3Operation.APPEND_STORAGE_LOG_CACHE).update(timerUtil.elapsed());
+        OperationMetricsStats.getHistogram(S3Operation.APPEND_STORAGE_LOG_CACHE).update(timerUtil.elapsedAs(TimeUnit.NANOSECONDS));
         return full;
     }
 
@@ -100,7 +102,7 @@ public class LogCache {
      * Note: the records is retained, the caller should release it.
      */
     public List<StreamRecordBatch> get(long streamId, long startOffset, long endOffset, int maxBytes) {
-        TimerUtil timerUtil = new TimerUtil(TimeUnit.MILLISECONDS);
+        TimerUtil timerUtil = new TimerUtil();
         List<StreamRecordBatch> records = get0(streamId, startOffset, endOffset, maxBytes);
         records.forEach(StreamRecordBatch::retain);
         if (!records.isEmpty() && records.get(0).getBaseOffset() <= startOffset) {
@@ -108,7 +110,7 @@ public class LogCache {
         } else {
             OperationMetricsStats.getCounter(S3Operation.READ_STORAGE_LOG_CACHE_MISS).inc();
         }
-        OperationMetricsStats.getHistogram(S3Operation.READ_STORAGE_LOG_CACHE).update(timerUtil.elapsed());
+        OperationMetricsStats.getHistogram(S3Operation.READ_STORAGE_LOG_CACHE).update(timerUtil.elapsedAs(TimeUnit.NANOSECONDS));
         return records;
     }
 
@@ -186,11 +188,11 @@ public class LogCache {
     }
 
     private void tryRealFree() {
-        if (size.get() <= cacheBlockMaxSize * 0.9) {
+        if (size.get() <= capacity * 0.9) {
             return;
         }
         blocks.removeIf(b -> {
-            if (size.get() <= cacheBlockMaxSize * 0.9) {
+            if (size.get() <= capacity * 0.9) {
                 return false;
             }
             if (b.free) {

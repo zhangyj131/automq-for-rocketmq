@@ -27,8 +27,9 @@ import java.io.IOException;
  * 2. WALBlockDeviceChannel based on block device, which uses O_DIRECT to bypass page cache.
  */
 public interface WALChannel {
-    static WALChannelBuilder builder(String path, long capacity) {
-        return new WALChannelBuilder(path, capacity);
+
+    static WALChannelBuilder builder(String path) {
+        return new WALChannelBuilder(path);
     }
 
     void open() throws IOException;
@@ -40,10 +41,24 @@ public interface WALChannel {
     /**
      * Write bytes from the given buffer to the given position of the channel from the current reader index
      * to the end of the buffer. It only returns when all bytes are written successfully.
+     * {@link #flush()} should be called after this method to ensure data is flushed to disk.
      * This method will change the reader index of the given buffer to the end of the written bytes.
      * This method will not change the writer index of the given buffer.
      */
     void write(ByteBuf src, long position) throws IOException;
+
+    /**
+     * Flush to disk.
+     */
+    void flush() throws IOException;
+
+    /**
+     * Call {@link #write(ByteBuf, long)} and {@link #flush()}.
+     */
+    default void writeAndFlush(ByteBuf src, long position) throws IOException {
+        write(src, position);
+        flush();
+    }
 
     /**
      * Read bytes from the given position of the channel to the given buffer from the current writer index
@@ -54,19 +69,36 @@ public interface WALChannel {
     int read(ByteBuf dst, long position) throws IOException;
 
     class WALChannelBuilder {
+        public static final String DEVICE_PREFIX = "/dev/";
         private final String path;
-        private final long capacity;
+        private boolean direct;
+        private long capacity;
+        private boolean readOnly;
 
-        private WALChannelBuilder(String path, long capacity) {
+        private WALChannelBuilder(String path) {
             this.path = path;
+        }
+
+        public WALChannelBuilder direct(boolean direct) {
+            this.direct = direct;
+            return this;
+        }
+
+        public WALChannelBuilder capacity(long capacity) {
             this.capacity = capacity;
+            return this;
+        }
+
+        public WALChannelBuilder readOnly(boolean readOnly) {
+            this.readOnly = readOnly;
+            return this;
         }
 
         public WALChannel build() {
-            if (path.startsWith("/dev/")) {
+            if (direct || path.startsWith(DEVICE_PREFIX)) {
                 return new WALBlockDeviceChannel(path, capacity);
             } else {
-                return new WALFileChannel(path, capacity);
+                return new WALFileChannel(path, capacity, readOnly);
             }
         }
     }

@@ -34,6 +34,8 @@ import com.automq.stream.s3.objects.StreamObject;
 import com.automq.stream.s3.operator.S3Operator;
 import com.automq.stream.s3.streams.StreamManager;
 import com.automq.stream.utils.LogContext;
+import com.automq.stream.utils.ThreadUtils;
+import com.automq.stream.utils.Threads;
 import io.github.bucket4j.Bucket;
 import io.netty.util.concurrent.DefaultThreadFactory;
 
@@ -65,11 +67,12 @@ public class CompactionManager {
     private final StreamManager streamManager;
     private final S3Operator s3Operator;
     private final CompactionAnalyzer compactionAnalyzer;
-    private final ScheduledExecutorService scheduledExecutorService;
+    private final ScheduledExecutorService compactScheduledExecutor;
+    private final ScheduledExecutorService bucketCallbackScheduledExecutor;
     private final ExecutorService compactThreadPool;
     private final ExecutorService forceSplitThreadPool;
     private final CompactionUploader uploader;
-    private final Config kafkaConfig;
+    private final Config config;
     private final int maxObjectNumToCompact;
     private final int compactionInterval;
     private final int forceSplitObjectPeriod;
@@ -81,10 +84,10 @@ public class CompactionManager {
     private Bucket compactionBucket = null;
 
     public CompactionManager(Config config, ObjectManager objectManager, StreamManager streamManager, S3Operator s3Operator) {
-        String logPrefix = String.format("[CompactionManager id=%d] ", config.brokerId());
+        String logPrefix = String.format("[CompactionManager id=%d] ", config.nodeId());
         this.logger = new LogContext(logPrefix).logger(CompactionManager.class);
         this.s3ObjectLogger = S3ObjectLogger.logger(logPrefix);
-        this.kafkaConfig = config;
+        this.config = config;
         this.objectManager = objectManager;
         this.streamManager = streamManager;
         this.s3Operator = s3Operator;
@@ -99,8 +102,11 @@ public class CompactionManager {
         maxStreamNumPerStreamSetObject = config.maxStreamNumPerStreamSetObject();
         maxStreamObjectNumPerCommit = config.maxStreamObjectNumPerCommit();
         this.compactionAnalyzer = new CompactionAnalyzer(compactionCacheSize, streamSplitSize, maxStreamNumPerStreamSetObject,
-                maxStreamObjectNumPerCommit, new LogContext(String.format("[CompactionAnalyzer id=%d] ", config.brokerId())));
-        this.scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(new DefaultThreadFactory("schedule-compact-executor"));
+                maxStreamObjectNumPerCommit, new LogContext(String.format("[CompactionAnalyzer id=%d] ", config.nodeId())));
+        this.compactScheduledExecutor = Threads.newSingleThreadScheduledExecutor(
+                ThreadUtils.createThreadFactory("schedule-compact-executor-%d", true), logger);
+        this.bucketCallbackScheduledExecutor = Threads.newSingleThreadScheduledExecutor(
+                ThreadUtils.createThreadFactory("s3-data-block-reader-bucket-cb-%d", true), logger);
         this.compactThreadPool = Executors.newFixedThreadPool(1, new DefaultThreadFactory("object-compaction-manager"));
         this.forceSplitThreadPool = Executors.newFixedThreadPool(1, new DefaultThreadFactory("force-split-executor"));
         this.logger.info("Compaction manager initialized with config: compactionInterval: {} min, compactionCacheSize: {} bytes, " +
@@ -114,27 +120,28 @@ public class CompactionManager {
 
     private void scheduleNextCompaction(long delayMillis) {
         logger.info("Next Compaction started in {} ms", delayMillis);
-        this.scheduledExecutorService.schedule(() -> {
-            TimerUtil timerUtil = new TimerUtil(TimeUnit.MILLISECONDS);
+        this.compactScheduledExecutor.schedule(() -> {
+            TimerUtil timerUtil = new TimerUtil();
             try {
                 logger.info("Compaction started");
                 this.compact()
-                        .thenAccept(result -> logger.info("Compaction complete, total cost {} ms", timerUtil.elapsed()))
+                        .thenAccept(result -> logger.info("Compaction complete, total cost {} ms", timerUtil.elapsedAs(TimeUnit.MILLISECONDS)))
                         .exceptionally(ex -> {
-                            logger.error("Compaction failed, cost {} ms, ", timerUtil.elapsed(), ex);
+                            logger.error("Compaction failed, cost {} ms, ", timerUtil.elapsedAs(TimeUnit.MILLISECONDS), ex);
                             return null;
                         })
                         .join();
             } catch (Exception ex) {
                 logger.error("Error while compacting objects ", ex);
             }
-            long nextDelay = Math.max(0, (long) this.compactionInterval * 60 * 1000 - timerUtil.elapsed());
+            long nextDelay = Math.max(0, (long) this.compactionInterval * 60 * 1000 - timerUtil.elapsedAs(TimeUnit.MILLISECONDS));
             scheduleNextCompaction(nextDelay);
         }, delayMillis, TimeUnit.MILLISECONDS);
     }
 
     public void shutdown() {
-        this.scheduledExecutorService.shutdown();
+        this.compactScheduledExecutor.shutdown();
+        this.bucketCallbackScheduledExecutor.shutdown();
         this.uploader.stop();
     }
 
@@ -175,7 +182,7 @@ public class CompactionManager {
 
     private void forceSplitObjects(List<StreamMetadata> streamMetadataList, List<S3ObjectMetadata> objectsToForceSplit) {
         logger.info("Force split {} stream set objects", objectsToForceSplit.size());
-        TimerUtil timerUtil = new TimerUtil(TimeUnit.MILLISECONDS);
+        TimerUtil timerUtil = new TimerUtil();
         for (int i = 0; i < objectsToForceSplit.size(); i++) {
             timerUtil.reset();
             S3ObjectMetadata objectToForceSplit = objectsToForceSplit.get(i);
@@ -186,11 +193,11 @@ public class CompactionManager {
                 continue;
             }
             logger.info("Build force split request for object {} complete, generated {} stream objects, time cost: {} ms, start committing objects",
-                    objectToForceSplit.objectId(), request.getStreamObjects().size(), timerUtil.elapsed());
+                    objectToForceSplit.objectId(), request.getStreamObjects().size(), timerUtil.elapsedAs(TimeUnit.MILLISECONDS));
             timerUtil.reset();
             objectManager.commitStreamSetObject(request)
                     .thenAccept(resp -> {
-                        logger.info("Commit force split request succeed, time cost: {} ms", timerUtil.elapsed());
+                        logger.info("Commit force split request succeed, time cost: {} ms", timerUtil.elapsedAs(TimeUnit.MILLISECONDS));
                         if (s3ObjectLogEnable) {
                             s3ObjectLogger.trace("[Compact] {}", request);
                         }
@@ -214,7 +221,7 @@ public class CompactionManager {
             objectsToCompact = objectsToCompact.subList(0, maxObjectNumToCompact);
         }
         logger.info("Compact {} stream set objects", objectsToCompact.size());
-        TimerUtil timerUtil = new TimerUtil(TimeUnit.MILLISECONDS);
+        TimerUtil timerUtil = new TimerUtil();
         CommitStreamSetObjectRequest request = buildCompactRequest(streamMetadataList, objectsToCompact);
         if (request == null) {
             return;
@@ -224,11 +231,11 @@ public class CompactionManager {
             return;
         }
         logger.info("Build compact request for {} stream set objects complete, stream set object id: {}, stresam set object size: {}, stream object num: {}, time cost: {}, start committing objects",
-                request.getCompactedObjectIds().size(), request.getObjectId(), request.getObjectSize(), request.getStreamObjects().size(), timerUtil.elapsed());
+                request.getCompactedObjectIds().size(), request.getObjectId(), request.getObjectSize(), request.getStreamObjects().size(), timerUtil.elapsedAs(TimeUnit.MILLISECONDS));
         timerUtil.reset();
         objectManager.commitStreamSetObject(request)
                 .thenAccept(resp -> {
-                    logger.info("Commit compact request succeed, time cost: {} ms", timerUtil.elapsed());
+                    logger.info("Commit compact request succeed, time cost: {} ms", timerUtil.elapsedAs(TimeUnit.MILLISECONDS));
                     if (s3ObjectLogEnable) {
                         s3ObjectLogger.trace("[Compact] {}", request);
                     }
@@ -264,7 +271,7 @@ public class CompactionManager {
     public CompletableFuture<Void> forceSplitAll() {
         CompletableFuture<Void> cf = new CompletableFuture<>();
         //TODO: deal with metadata delay
-        this.scheduledExecutorService.execute(() -> this.objectManager.getServerObjects().thenAcceptAsync(objectMetadataList -> {
+        this.compactScheduledExecutor.execute(() -> this.objectManager.getServerObjects().thenAcceptAsync(objectMetadataList -> {
             List<Long> streamIds = objectMetadataList.stream().flatMap(e -> e.getOffsetRanges().stream())
                     .map(StreamOffsetRange::getStreamId).distinct().toList();
             this.streamManager.getStreams(streamIds).thenAcceptAsync(streamMetadataList -> {
@@ -341,14 +348,14 @@ public class CompactionManager {
             objectManager.prepareObject(batchGroup.size(), TimeUnit.MINUTES.toMillis(CompactionConstants.S3_OBJECT_TTL_MINUTES))
                     .thenComposeAsync(objectId -> {
                         List<StreamDataBlock> blocksToRead = batchGroup.stream().flatMap(p -> p.getLeft().stream()).toList();
-                        DataBlockReader reader = new DataBlockReader(objectMetadata, s3Operator, compactionBucket);
+                        DataBlockReader reader = new DataBlockReader(objectMetadata, s3Operator, compactionBucket, bucketCallbackScheduledExecutor);
                         // batch read
                         reader.readBlocks(blocksToRead, Math.min(CompactionConstants.S3_OBJECT_MAX_READ_BATCH, networkBandwidth));
 
                         List<CompletableFuture<Void>> cfs = new ArrayList<>();
                         for (Pair<List<StreamDataBlock>, CompletableFuture<StreamObject>> pair : batchGroup) {
                             List<StreamDataBlock> blocks = pair.getLeft();
-                            DataBlockWriter writer = new DataBlockWriter(objectId, s3Operator, kafkaConfig.objectPartSize());
+                            DataBlockWriter writer = new DataBlockWriter(objectId, s3Operator, config.objectPartSize());
                             for (StreamDataBlock block : blocks) {
                                 writer.write(block);
                             }
@@ -528,7 +535,7 @@ public class CompactionManager {
             for (Map.Entry<Long, List<StreamDataBlock>> streamDataBlocEntry : compactionPlan.streamDataBlocksMap().entrySet()) {
                 S3ObjectMetadata metadata = s3ObjectMetadataMap.get(streamDataBlocEntry.getKey());
                 List<StreamDataBlock> streamDataBlocks = streamDataBlocEntry.getValue();
-                DataBlockReader reader = new DataBlockReader(metadata, s3Operator, compactionBucket);
+                DataBlockReader reader = new DataBlockReader(metadata, s3Operator, compactionBucket, bucketCallbackScheduledExecutor);
                 reader.readBlocks(streamDataBlocks, Math.min(CompactionConstants.S3_OBJECT_MAX_READ_BATCH, networkBandwidth));
             }
             List<CompletableFuture<StreamObject>> streamObjectCFList = new ArrayList<>();

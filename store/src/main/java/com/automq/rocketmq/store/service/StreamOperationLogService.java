@@ -76,6 +76,13 @@ public class StreamOperationLogService implements OperationLogService {
                     return snapshot.getSnapshotEndOffset() + 1;
                 });
         }
+
+        if (startOffset == endOffset) {
+            // no operation
+            return snapshotFetch.thenAccept(offset -> {
+            });
+        }
+
         // 2. get all operations
         // TODO: batch fetch, fetch all at once may cause some problems
         return snapshotFetch.thenCompose(offset -> streamStore.fetch(StoreContext.EMPTY, operationStreamId, offset, (int) (endOffset - offset))
@@ -101,7 +108,7 @@ public class StreamOperationLogService implements OperationLogService {
 
     @Override
     public CompletableFuture<LogResult> logPopOperation(PopOperation operation) {
-        return streamStore.append(operation.operationStreamId(),
+        return streamStore.append(StoreContext.EMPTY, operation.operationStreamId(),
                 new SingleRecord(ByteBuffer.wrap(SerializeUtil.encodePopOperation(operation))))
             .thenApply(result -> {
                 try {
@@ -115,7 +122,7 @@ public class StreamOperationLogService implements OperationLogService {
 
     @Override
     public CompletableFuture<LogResult> logAckOperation(AckOperation operation) {
-        return streamStore.append(operation.operationStreamId(),
+        return streamStore.append(StoreContext.EMPTY, operation.operationStreamId(),
                 new SingleRecord(ByteBuffer.wrap(SerializeUtil.encodeAckOperation(operation))))
             .thenApply(result -> {
                 try {
@@ -130,7 +137,7 @@ public class StreamOperationLogService implements OperationLogService {
     @Override
     public CompletableFuture<LogResult> logChangeInvisibleDurationOperation(
         ChangeInvisibleDurationOperation operation) {
-        return streamStore.append(operation.operationStreamId(),
+        return streamStore.append(StoreContext.EMPTY, operation.operationStreamId(),
                 new SingleRecord(ByteBuffer.wrap(SerializeUtil.encodeChangeInvisibleDurationOperation(operation))))
             .thenApply(result -> {
                 try {
@@ -144,7 +151,7 @@ public class StreamOperationLogService implements OperationLogService {
 
     @Override
     public CompletableFuture<LogResult> logResetConsumeOffsetOperation(ResetConsumeOffsetOperation operation) {
-        return streamStore.append(operation.operationStreamId(),
+        return streamStore.append(StoreContext.EMPTY, operation.operationStreamId(),
                 new SingleRecord(ByteBuffer.wrap(SerializeUtil.encodeResetConsumeOffsetOperation(operation))))
             .thenApply(result -> {
                 try {

@@ -17,6 +17,7 @@
 
 package com.automq.stream.s3.wal.util;
 
+import com.automq.stream.s3.wal.WALNotInitializedException;
 import io.netty.buffer.ByteBuf;
 
 import java.io.File;
@@ -29,12 +30,14 @@ public class WALFileChannel implements WALChannel {
     final String filePath;
     final long fileCapacityWant;
     long fileCapacityFact = 0;
+    boolean readOnly;
     RandomAccessFile randomAccessFile;
     FileChannel fileChannel;
 
-    public WALFileChannel(String filePath, long fileCapacityWant) {
+    public WALFileChannel(String filePath, long fileCapacityWant, boolean readOnly) {
         this.filePath = filePath;
         this.fileCapacityWant = fileCapacityWant;
+        this.readOnly = readOnly;
     }
 
     @Override
@@ -43,10 +46,10 @@ public class WALFileChannel implements WALChannel {
         if (file.exists()) {
             randomAccessFile = new RandomAccessFile(file, "rw");
             fileCapacityFact = randomAccessFile.length();
-            if (fileCapacityFact != fileCapacityWant) {
+            if (!readOnly && fileCapacityFact != fileCapacityWant) {
                 throw new IOException("file " + filePath + " capacity " + fileCapacityFact + " not equal to requested " + fileCapacityWant);
             }
-        } else {
+        } else if (!readOnly) {
             if (!file.getParentFile().exists()) {
                 if (!file.getParentFile().mkdirs()) {
                     throw new IOException("mkdirs " + file.getParentFile() + " fail");
@@ -61,6 +64,8 @@ public class WALFileChannel implements WALChannel {
             randomAccessFile = new RandomAccessFile(file, "rw");
             randomAccessFile.setLength(fileCapacityWant);
             fileCapacityFact = fileCapacityWant;
+        } else {
+            throw new WALNotInitializedException("read only open uninitialized WAL " + filePath);
         }
 
         fileChannel = randomAccessFile.getChannel();
@@ -82,20 +87,31 @@ public class WALFileChannel implements WALChannel {
 
     @Override
     public void write(ByteBuf src, long position) throws IOException {
-        assert src.readableBytes() + position <= fileCapacityFact;
+        assert src.readableBytes() + position <= capacity();
         ByteBuffer[] nioBuffers = src.nioBuffers();
         for (ByteBuffer nioBuffer : nioBuffers) {
             int bytesWritten = write(nioBuffer, position);
             position += bytesWritten;
         }
+    }
+
+    @Override
+    public void flush() throws IOException {
         fileChannel.force(false);
     }
 
     @Override
     public int read(ByteBuf dst, long position) throws IOException {
-        ByteBuffer nioBuffer = dst.nioBuffer(dst.writerIndex(), dst.writableBytes());
-        int bytesRead = read(nioBuffer, position);
-        dst.writerIndex(dst.writerIndex() + bytesRead);
+        assert dst.writableBytes() + position <= capacity();
+        int bytesRead = 0;
+        while (dst.isWritable()) {
+            int read = dst.writeBytes(fileChannel, position + bytesRead, dst.writableBytes());
+            if (read == -1) {
+                // EOF
+                break;
+            }
+            bytesRead += read;
+        }
         return bytesRead;
     }
 
@@ -109,18 +125,5 @@ public class WALFileChannel implements WALChannel {
             bytesWritten += written;
         }
         return bytesWritten;
-    }
-
-    private int read(ByteBuffer dst, long position) throws IOException {
-        int bytesRead = 0;
-        while (dst.hasRemaining()) {
-            int read = fileChannel.read(dst, position + bytesRead);
-            if (read == -1) {
-                // EOF
-                break;
-            }
-            bytesRead += read;
-        }
-        return bytesRead;
     }
 }
