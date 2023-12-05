@@ -29,4 +29,4 @@ elif [ "$OS_NAME" == "Darwin" ]; then
 fi
 export EXTERNAL_IP="$IP"
 
-docker compose up
+docker-compose up

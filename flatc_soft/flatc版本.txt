@@ -1,0 +1,8 @@
+版本 v23.5.26
+
+下载地址
+https://github.com/google/flatbuffers/releases
+
+
+FlatBuffers 是一个跨平台序列化库，旨在实现最大内存效率。 它允许您直接访问序列化数据，而无需先解析/解包它，同时仍然具有出色的前向/后向兼容性。
+
