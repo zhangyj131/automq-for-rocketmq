@@ -47,12 +47,12 @@ public class BrokerConfig implements ControllerConfig {
      * 10.0.0.1:0
      * 10.0.0.1:8081
      */
-    private String bindAddress;
+    private String bindAddress;////docker-compose.yaml ROCKETMQ_NODE_BIND_ADDRESS=0.0.0.0:8081
 
     /**
      * Advertise address in HOST:PORT format.
      */
-    private String advertiseAddress;
+    private String advertiseAddress;//docker-compose.yaml ROCKETMQ_NODE_ADVERTISE_ADDRESS=${EXTERNAL_IP}:8081
 
     /**
      * Access key and secret key for system internal access.

@@ -1,0 +1,34 @@
+name: DefaultBroker
+instanceId: "ec2-test"
+bindAddress: "0.0.0.0:8281"
+innerAccessKey: ""
+innerSecretKey: ""
+s3Stream:
+  s3WALPath: "/tmp/s3rocketmq/wal"
+  s3Endpoint: "http://172.16.0.11:9000"
+  s3Bucket: "bucket-name"
+  s3Region: "us-east-1"
+  s3ForcePathStyle: true
+  s3AccessKey: "access-key"
+  s3SecretKey: "secret-key"
+  networkBaselineBandwidth: 5242880
+  refillPeriodMs: 100
+store:
+  kvPath: "/tmp/s3rocketmq/kvstore"
+db:
+  url: "jdbc:mysql://172.16.0.11:3306/metadata"
+  userName: "root"
+  password: "password"
+controller:
+  recycleS3IntervalInSecs: 360
+  dumpHeapOnError: true
+metrics:
+  exporterType: "OTLP_GRPC"
+  grpcExporterTarget: "http://10.129.63.127:4317"
+  grpcExporterHeader: ""
+  grpcExporterTimeOutInMills: 31000
+  periodicExporterIntervalInMills: 30000
+  promExporterPort: 5557
+  promExporterHost: "localhost"
+  labels: ""
+  exportInDelta: false

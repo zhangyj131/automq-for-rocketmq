@@ -46,8 +46,8 @@ services:
     # https://docs.docker.com/compose/compose-file/05-services/#entrypoint
     environment:
       - ROCKETMQ_NODE_NAME=broker-1
-      - ROCKETMQ_NODE_BIND_ADDRESS=0.0.0.0:8081
-      - ROCKETMQ_NODE_ADVERTISE_ADDRESS=${EXTERNAL_IP}:8081
+      - ROCKETMQ_NODE_BIND_ADDRESS=0.0.0.0:8081 #com.automq.rocketmq.common.config.BrokerConfig#initEnvVar ����ROCKETMQ_NODE��ͷ�Ļ�������
+      - ROCKETMQ_NODE_ADVERTISE_ADDRESS=${EXTERNAL_IP}:8081 #EXTERNAL-IP Ϊ nodes����ʾ��ͨ�� Cluster ÿ���ڵ������ IP ���� Service
     ports:
       - "8081:8081"
       - "8082:8082"

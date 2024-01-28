@@ -133,13 +133,15 @@ public class BrokerController implements Lifecycle {
             gitProperties.load(inputStream);
         } catch (Exception e) {
             LOGGER.warn("read project version failed", e);
-            throw new RuntimeException(e);
+//            throw new RuntimeException(e);//idea上启动
         }
 
         AttributesBuilder builder = Attributes.builder();
         builder.put(SERVICE_NAME, brokerConfig.name());
-        builder.put(SERVICE_VERSION, (String) gitProperties.get("git.build.version"));
-        builder.put("git.hash", (String) gitProperties.get("git.commit.id.describe"));
+//        builder.put(SERVICE_VERSION, (String) gitProperties.get("git.build.version"));//idea上启动
+        builder.put(SERVICE_VERSION, "5.1.3-automq-0-SNAPSHOT");
+//        builder.put("git.hash", (String) gitProperties.get("git.commit.id.describe"));//idea上启动
+        builder.put("git.hash", "e8060c3-dirty");
         builder.put(SERVICE_INSTANCE_ID, brokerConfig.instanceId());
 
         Resource resource = Resource.create(builder.build());
