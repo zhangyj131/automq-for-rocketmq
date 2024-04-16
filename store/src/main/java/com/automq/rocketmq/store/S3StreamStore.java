@@ -1,18 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright 2024, AutoMQ CO.,LTD.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Use of this software is governed by the Business Source License
+ * included in the file BSL.md
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * As of the Change Date specified in that file, in accordance with
+ * the Business Source License, use of this software will be governed
+ * by the Apache License, Version 2.0
  */
 
 package com.automq.rocketmq.store;
@@ -94,7 +88,7 @@ public class S3StreamStore implements StreamStore {
 
         S3Operator defaultOperator = new DefaultS3Operator(streamConfig.s3Endpoint(), streamConfig.s3Region(), streamConfig.s3Bucket(),
             streamConfig.s3ForcePathStyle(), List.of(() -> AwsBasicCredentials.create(streamConfig.s3AccessKey(), streamConfig.s3SecretKey())),
-            networkInboundLimiter, networkOutboundLimiter, true);
+            false, networkInboundLimiter, networkOutboundLimiter, true);
 
         WriteAheadLog writeAheadLog = BlockWALService.builder(s3Config.walPath(), s3Config.walCapacity()).config(s3Config).build();
         S3BlockCache blockCache = new DefaultS3BlockCache(s3Config, objectManager, defaultOperator);
@@ -105,7 +99,7 @@ public class S3StreamStore implements StreamStore {
         // Build the compaction manager
         S3Operator compactionOperator = new DefaultS3Operator(streamConfig.s3Endpoint(), streamConfig.s3Region(), streamConfig.s3Bucket(),
             streamConfig.s3ForcePathStyle(), List.of(() -> AwsBasicCredentials.create(streamConfig.s3AccessKey(), streamConfig.s3SecretKey())),
-            networkInboundLimiter, networkOutboundLimiter, true);
+            false, networkInboundLimiter, networkOutboundLimiter, true);
         this.compactionManager = new CompactionManager(s3Config, objectManager, streamManager, compactionOperator);
 
         this.streamClient = new S3StreamClient(streamManager, storage, objectManager, defaultOperator, s3Config, networkInboundLimiter, networkOutboundLimiter);
